@@ -1,0 +1,2451 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hermes Agent WebUI</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <!-- Markdown rendering (local vendor) -->
+  <script src="/static/vendor/marked.min.js"></script>
+  <link rel="stylesheet" href="/static/vendor/github-dark.min.css">
+  <script src="/static/vendor/highlight.min.js"></script>
+  <script src="/static/vendor/hl-langs/python.min.js"></script>
+  <script src="/static/vendor/hl-langs/javascript.min.js"></script>
+  <script src="/static/vendor/hl-langs/typescript.min.js"></script>
+  <script src="/static/vendor/hl-langs/bash.min.js"></script>
+  <script src="/static/vendor/hl-langs/powershell.min.js"></script>
+  <script src="/static/vendor/hl-langs/json.min.js"></script>
+  <script src="/static/vendor/hl-langs/yaml.min.js"></script>
+  <script src="/static/vendor/hl-langs/xml.min.js"></script>
+  <script src="/static/vendor/hl-langs/sql.min.js"></script>
+  <script src="/static/vendor/hl-langs/css.min.js"></script>
+  <script src="/static/vendor/hl-langs/markdown.min.js"></script>
+  <script src="/static/vendor/hl-langs/java.min.js"></script>
+  <script src="/static/vendor/hl-langs/go.min.js"></script>
+  <script src="/static/vendor/hl-langs/rust.min.js"></script>
+  <script src="/static/vendor/hl-langs/cpp.min.js"></script>
+  <script src="/static/vendor/hl-langs/diff.min.js"></script>
+  <script>
+    // Register highlight.js languages and configure marked
+    (function() {
+      const langs = {
+        python:'python', javascript:'javascript', js:'javascript',
+        typescript:'typescript', ts:'typescript', bash:'bash', sh:'bash',
+        shell:'bash', powershell:'powershell', ps1:'powershell',
+        json:'json', yaml:'yaml', yml:'yaml', xml:'xml', html:'xml',
+        sql:'sql', css:'css', markdown:'markdown', md:'markdown',
+        java:'java', go:'go', rust:'rust', rs:'rust', cpp:'cpp', c:'cpp',
+        'c++':'cpp', diff:'diff',
+      };
+      // Configure marked to use highlight.js via the extension API
+      if (typeof marked !== 'undefined' && typeof hljs !== 'undefined') {
+        const renderer = new marked.Renderer();
+        renderer.code = function(obj) {
+          const code = typeof obj === 'object' ? obj.text : obj;
+          const lang = typeof obj === 'object' ? obj.lang : arguments[1];
+          const mapped = langs[(lang||'').toLowerCase()];
+          let highlighted = code;
+          if (mapped && hljs.getLanguage(mapped)) {
+            highlighted = hljs.highlight(code, { language: mapped }).value;
+          } else {
+            highlighted = hljs.highlightAuto(code).value;
+          }
+          return '<div class="code-wrap relative mb-3 rounded-lg overflow-hidden border border-gray-800">'
+            + '<div class="flex items-center justify-between px-4 py-1.5 bg-gray-900 border-b border-gray-800">'
+            + '<span class="text-[11px] text-gray-500 font-mono">' + (lang || 'text') + '</span>'
+            + '<span class="copy-btn text-[11px] text-gray-500 hover:text-hermes-400 transition flex items-center gap-1 cursor-pointer select-none"'
+            + ' data-code="' + code.replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '">'
+            + '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>复制代码</span>'
+            + '</div>'
+            + '<pre><code class="hljs language-' + (lang||'text') + '">' + highlighted + '</code></pre>'
+            + '</div>';
+        };
+        marked.setOptions({
+          renderer: renderer,
+          breaks: true,
+          gfm: true,
+        });
+      }
+      // Delegated click handler for copy buttons on code blocks
+      document.addEventListener('click', function(e) {
+        var btn = e.target.closest('.copy-btn');
+        if (!btn) return;
+        var code = btn.getAttribute('data-code');
+        if (!code) return;
+        // decodeURIComponent returns original code
+        var decoded = decodeURIComponent(code);
+        var ta = document.createElement('textarea');
+        ta.value = decoded;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        var ok = document.createElement('span');
+        ok.textContent = '✓';
+        ok.style.cssText = 'color:#34d399;font-size:11px;margin-right:4px';
+        btn.parentNode.insertBefore(ok, btn);
+        setTimeout(function() { ok.remove(); }, 1200);
+      });
+    })();
+  </script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            hermes: { 50:'#eef2ff',100:'#e0e7ff',200:'#c7d2fe',300:'#a5b4fc',400:'#818cf8',500:'#6366f1',600:'#4f46e5',700:'#4338ca',800:'#3730a3',900:'#312e81',950:'#1e1b4b' },
+            accent: { 50:'#eef2ff',100:'#e0e7ff',200:'#c7d2fe',300:'#a5b4fc',400:'#818cf8',500:'#6366f1',600:'#4f46e5',700:'#4338ca',800:'#3730a3',900:'#312e81',950:'#1e1b4b' },
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    :root {
+      --bg-primary: #0a0a0f;
+      --bg-secondary: #111118;
+      --bg-card: #16161f;
+      --bg-hover: #1e1e2a;
+      --bg-input: #0e0e16;
+      --border-default: #1e1e2a;
+      --border-active: #4338ca55;
+      --text-primary: #e4e4ec;
+      --text-secondary: #8b8b9e;
+      --text-muted: #5c5c70;
+      --accent: #6366f1;
+      --accent-glow: #6366f133;
+      --success: #10b981;
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+      --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
+      --shadow-glow: 0 0 24px rgba(99,102,241,0.08);
+      --transition: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    [x-cloak] { display: none !important; }
+    body {
+      font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      letter-spacing: -0.01em;
+    }
+    ::selection { background: #6366f144; color: #e4e4ec; }
+    /* Scrollbar */
+    .scrollbar-thin::-webkit-scrollbar { width: 5px; height: 5px; }
+    .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+    .scrollbar-thin::-webkit-scrollbar-thumb { background: #2a2a3a; border-radius: 3px; }
+    .scrollbar-thin::-webkit-scrollbar-thumb:hover { background: #3a3a4a; }
+
+    /* ===== Animations ===== */
+    .fade-in { animation: fadeIn 0.25s ease-out; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+    .slide-in { animation: slideIn 0.2s ease-out; }
+    @keyframes slideIn { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: translateX(0); } }
+
+    /* ===== Cards ===== */
+    .ui-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-md);
+      transition: border-color var(--transition), box-shadow var(--transition);
+    }
+    .ui-card:hover { border-color: #2a2a3a; }
+    .ui-card.active { border-color: var(--border-active); box-shadow: var(--shadow-glow); }
+    .ui-card-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 18px; border-bottom: 1px solid var(--border-default);
+      font-weight: 600; font-size: 14px; color: var(--text-primary);
+    }
+    .ui-card-body { padding: 16px 18px; }
+
+    /* ===== Buttons ===== */
+    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; font-size: 13px; font-weight: 500; border-radius: var(--radius-sm); transition: all var(--transition); cursor: pointer; white-space: nowrap; }
+    .btn:active { transform: scale(0.97); }
+    .btn-primary { background: var(--accent); color: white; }
+    .btn-primary:hover { background: #5558e6; }
+    .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-ghost { background: transparent; color: var(--text-secondary); border: 1px solid transparent; }
+    .btn-ghost:hover { background: var(--bg-hover); color: var(--text-primary); border-color: var(--border-default); }
+    .btn-success { background: #10b98122; color: var(--success); border: 1px solid #10b98133; }
+    .btn-success:hover { background: #10b98133; }
+    .btn-danger { background: #ef444422; color: var(--danger); border: 1px solid #ef444433; }
+    .btn-danger:hover { background: #ef444433; }
+    .btn-xs { padding: 4px 10px; font-size: 11px; border-radius: 6px; }
+
+    /* ===== Inputs ===== */
+    .ui-input {
+      width: 100%; background: var(--bg-input); border: 1px solid var(--border-default);
+      border-radius: var(--radius-sm); padding: 8px 12px; font-size: 13px; color: var(--text-primary);
+      transition: border-color var(--transition);
+    }
+    .ui-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+    .ui-input::placeholder { color: var(--text-muted); }
+
+    /* ===== Badge ===== */
+    .badge { display: inline-flex; align-items: center; padding: 2px 10px; border-radius: 20px; font-size: 11px; font-weight: 500; }
+    .badge-success { background: #10b98118; color: var(--success); }
+    .badge-muted { background: #1e1e2a; color: var(--text-secondary); }
+    .badge-accent { background: #6366f118; color: #818cf8; }
+
+    /* ===== Status dot ===== */
+    .status-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+    .status-dot.online { background: var(--success); box-shadow: 0 0 6px #10b98166; }
+    .status-dot.offline { background: var(--danger); }
+
+    /* ===== Sidebar ===== */
+    .nav-item { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 10px 16px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 500; color: var(--text-secondary); transition: all 0.2s ease; cursor: pointer; border: 1px solid transparent; position: relative; width: 100%; }
+    .nav-item:hover { background: var(--bg-hover); color: var(--text-primary); transform: translateX(2px); }
+    .nav-item.active { background: linear-gradient(90deg, #6366f118 0%, #6366f108 100%); color: #a5b4fc; border-color: #6366f133; transform: none; }
+    .nav-item.active::before { content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 3px; height: 22px; background: #6366f1; border-radius: 0 3px 3px 0; }
+    .nav-item svg { width: 17px; height: 17px; opacity: 0.55; flex-shrink: 0; transition: all 0.2s; }
+    .nav-item:hover svg { opacity: 0.85; transform: scale(1.05); }
+    .nav-item.active svg { opacity: 1; color: #a5b4fc; transform: scale(1); }
+    .nav-item span { transition: all 0.2s; }
+    .nav-item:hover span { letter-spacing: 0.01em; }
+    .nav-item.active span { color: #a5b4fc; }
+
+    /* ===== Dashboard stat card ===== */
+    .stat-card {
+      background: var(--bg-card); border: 1px solid var(--border-default);
+      border-radius: var(--radius-lg); padding: 20px; transition: all var(--transition);
+    }
+    .stat-card:hover { border-color: #2a2a3a; transform: translateY(-1px); box-shadow: var(--shadow-md); }
+    .stat-card .stat-icon { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; margin-bottom: 12px; }
+    .stat-card .stat-label { font-size: 12px; color: var(--text-secondary); font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; }
+    .stat-card .stat-value { font-size: 28px; font-weight: 700; color: var(--text-primary); margin-top: 4px; line-height: 1; }
+    .stat-card .stat-sub { font-size: 12px; color: var(--text-muted); margin-top: 6px; }
+
+    /* ===== Config section card ===== */
+    .config-section { background: var(--bg-card); border: 1px solid var(--border-default); border-radius: var(--radius-md); overflow: hidden; transition: border-color var(--transition); }
+    .config-section:hover { border-color: #2a2a3a; }
+    .config-section-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; cursor: pointer; transition: background var(--transition); user-select: none; }
+    .config-section-header:hover { background: var(--bg-hover); }
+    .config-section-header .section-icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 15px; background: #1e1e2a; }
+    .config-field { background: var(--bg-input); border: 1px solid var(--border-default); border-radius: var(--radius-sm); padding: 12px 14px; }
+    .config-field label { font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em; }
+
+    /* ===== Chat bubbles ===== */
+    .chat-bubble-user { background: linear-gradient(135deg, #4f46e5, #6366f1); color: white; border-radius: 18px 18px 4px 18px; padding: 10px 16px; font-size: 14px; max-width: 75%; word-break: break-word; }
+    .chat-bubble-assistant { background: var(--bg-card); border: 1px solid var(--border-default); color: var(--text-primary); border-radius: 18px 18px 18px 4px; padding: 14px 18px; max-width: 85%; }
+    /* Streaming cursor */
+    .streaming-cursor::after { content: '▋'; animation: blink-cursor 1.2s ease-in-out infinite; color: #818cf8; font-weight: 100; }
+    @keyframes blink-cursor { 0%,100% { opacity: 1; } 50% { opacity: 0.15; } }
+
+    /* ===== Markdown rendered content ===== */
+    .markdown-body { color: var(--text-primary); line-height: 1.75; font-size: 14px; }
+    .markdown-body h1 { font-size: 1.4em; font-weight: 700; margin: 1em 0 0.5em; color: #e4e4ec; border-bottom: 1px solid var(--border-default); padding-bottom: 0.3em; }
+    .markdown-body h2 { font-size: 1.2em; font-weight: 600; margin: 0.9em 0 0.4em; color: #e4e4ec; }
+    .markdown-body h3 { font-size: 1.1em; font-weight: 600; margin: 0.8em 0 0.3em; }
+    .markdown-body h4 { font-size: 1em; font-weight: 600; margin: 0.7em 0 0.3em; color: #cbd5e1; }
+    .markdown-body p { margin: 0.5em 0; }
+    .markdown-body ul, .markdown-body ol { margin: 0.5em 0; padding-left: 1.8em; }
+    .markdown-body li { margin: 0.2em 0; }
+    .markdown-body code:not(pre code) { background: #1e1e2a; padding: 0.15em 0.4em; border-radius: 4px; font-size: 0.88em; color: #c084fc; font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace; }
+    .markdown-body pre { background: var(--bg-input); border: 1px solid var(--border-default); border-radius: var(--radius-sm); padding: 0; margin: 0; overflow: hidden; }
+    .markdown-body pre code { display: block; padding: 12px 16px; overflow-x: auto; font-size: 13px; font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace; line-height: 1.5; }
+    .markdown-body .code-wrap { margin: 0.8em 0; }
+    .markdown-body .code-wrap pre { border: none; border-radius: 0; }
+    .markdown-body pre code .hljs { background: transparent; }
+    .markdown-body blockquote { border-left: 2px solid var(--accent); margin: 0.8em 0; padding: 0.5em 1em; background: #6366f108; border-radius: 0 8px 8px 0; color: var(--text-secondary); }
+    .markdown-body table { border-collapse: collapse; margin: 0.8em 0; width: 100%; border-radius: var(--radius-sm); overflow: hidden; }
+    .markdown-body th, .markdown-body td { border: 1px solid var(--border-default); padding: 8px 12px; text-align: left; font-size: 13px; }
+    .markdown-body th { background: var(--bg-hover); font-weight: 600; color: var(--text-primary); }
+    .markdown-body tr:nth-child(even) { background: #ffffff03; }
+    .markdown-body a { color: #818cf8; text-decoration: none; }
+    .markdown-body a:hover { color: #a5b4fc; text-decoration: underline; }
+    .markdown-body img { max-width: 100%; border-radius: var(--radius-sm); margin: 0.5em 0; }
+    .markdown-body hr { border: none; border-top: 1px solid var(--border-default); margin: 1.5em 0; }
+    .markdown-body strong { color: #e4e4ec; font-weight: 600; }
+
+    /* ===== Toast notification ===== */
+    .toast { position: fixed; top: 20px; right: 20px; z-index: 9999; padding: 12px 20px; border-radius: var(--radius-md); font-size: 13px; font-weight: 500; box-shadow: var(--shadow-md); animation: slideInToast 0.3s ease-out; max-width: 360px; }
+    @keyframes slideInToast { from { opacity: 0; transform: translateX(40px); } to { opacity: 1; transform: translateX(0); } }
+    .toast-success { background: #059669; color: white; }
+    .toast-error { background: #dc2626; color: white; }
+
+    /* ===== Pulse animation ===== */
+    @keyframes pulse-glow { 0%,100% { box-shadow: 0 0 0 0 #6366f133; } 50% { box-shadow: 0 0 0 8px #6366f100; } }
+    .animate-spin-slow { animation: spin 2.5s linear infinite; }
+    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+    /* ===== Provider key field ===== */
+    .key-masked { letter-spacing: 2px; }
+
+    /* ===== Pre / Code blocks ===== */
+    pre.code-block { background: var(--bg-input); border: 1px solid var(--border-default); border-radius: var(--radius-sm); padding: 12px 16px; overflow-x: auto; font-size: 13px; color: var(--text-primary); }
+
+    /* ===== Tooltip ===== */
+    .has-tooltip { position: relative; }
+    .has-tooltip::after { content: attr(title); position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); padding: 4px 10px; background: var(--bg-card); border: 1px solid var(--border-default); border-radius: 6px; font-size: 11px; color: var(--text-primary); white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.15s; }
+    .has-tooltip:hover::after { opacity: 1; }
+
+    /* ===== Reduced motion ===== */
+    @media (prefers-reduced-motion: reduce) { *, ::before, ::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
+  </style>
+</head>
+<body class="dark bg-gray-950 text-gray-100 min-h-screen" x-data="app()" x-init="init()">
+
+  <div class="flex h-screen overflow-hidden">
+
+    <!-- ====== Sidebar ====== -->
+    <aside class="w-52 flex-shrink-0 border-r flex flex-col items-center" style="background:var(--bg-secondary);border-color:var(--border-default)">
+      <div class="px-3 py-5 w-full flex justify-center" style="border-color:var(--border-default)">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style="background:linear-gradient(135deg,#4f46e5,#6366f1)">
+            <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+          </div>
+          <h1 class="font-bold text-sm" style="color:var(--text-primary)">Hermes Agent</h1>
+        </div>
+      </div>
+
+      <nav class="flex-1 px-3 py-4 space-y-1 w-full overflow-y-auto scrollbar-thin">
+        <template x-for="item in nav" :key="item.id">
+          <button
+            @click="page = item.id"
+            :class="page === item.id ? 'nav-item active' : 'nav-item'"
+            x-html="item.icon + '<span>' + item.label + '</span>'">
+          </button>
+        </template>
+      </nav>
+
+      <div class="pb-4 text-xs flex items-center gap-1.5 justify-center" style="color:var(--text-muted)">
+        <template x-if="gatewayStatus === 'connected'">
+          <div class="flex items-center gap-1.5"><span class="status-dot online"></span><span x-text="status.current_model || 'Gateway'"></span></div>
+        </template>
+        <template x-if="gatewayStatus === 'disconnected'">
+          <div class="flex items-center gap-1.5"><span class="status-dot offline"></span>Gateway 断开</div>
+        </template>
+        <template x-if="gatewayStatus === 'timeout'">
+          <div class="flex items-center gap-1.5"><span class="status-dot offline"></span>Gateway 超时</div>
+        </template>
+        <template x-if="!gatewayStatus || gatewayStatus === 'unknown'">
+          <div class="flex items-center gap-1.5"><span class="status-dot offline"></span>检测中...</div>
+        </template>
+      </div>
+    </aside>
+
+    <!-- Global Toast -->
+    <div x-show="toastMsg" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 translate-x-8" x-transition:enter-end="opacity-100 translate-x-0"
+         x-transition:leave="transition ease-in duration-200" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0"
+         class="toast" :class="toastOk ? 'toast-success' : 'toast-error'" x-text="toastMsg"></div>
+
+    <!-- ====== Main Content ====== -->
+    <main class="flex-1 overflow-y-auto scrollbar-thin bg-gray-950">
+
+      <!-- ==================== DASHBOARD ==================== -->
+      <div x-show="page === 'dashboard'" x-cloak class="p-8 space-y-8 fade-in">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-2xl font-bold" style="color:var(--text-primary)">Dashboard</h2>
+            <p class="text-sm mt-1" style="color:var(--text-secondary)">Hermes Agent 运行状态概览</p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div class="stat-card">
+            <div class="stat-icon" style="background:#6366f118"><svg class="w-5 h-5" style="color:#818cf8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg></div>
+            <div class="stat-label">当前模型</div>
+            <div class="stat-value text-lg font-semibold mt-1" style="color:#a5b4fc" x-text="status.current_model || '未配置'"></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon" style="background:#10b98118"><svg class="w-5 h-5" style="color:#34d399" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg></div>
+            <div class="stat-label">对话会话</div>
+            <div class="stat-value" x-text="status.session_count ?? '—'"></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon" style="background:#f59e0b18"><svg class="w-5 h-5" style="color:#fbbf24" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg></div>
+            <div class="stat-label">已安装技能</div>
+            <div class="stat-value" x-text="status.skill_count ?? '—'"></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon" style="background:#6366f118"><svg class="w-5 h-5" style="color:#818cf8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>
+            <div class="stat-label">定时任务</div>
+            <div class="stat-value" x-text="status.cron_count ?? '—'"></div>
+          </div>
+        </div>
+
+        <!-- Model Quick Switch -->
+        <div class="ui-card">
+          <div class="ui-card-header">
+            <h3>快捷切换模型</h3>
+            <button @click="loadModels()" class="btn btn-ghost btn-xs">刷新</button>
+          </div>
+          <div class="ui-card-body">
+            <div x-show="modelSwitchMsg" class="mb-3 text-sm" :class="modelSwitchOk ? 'text-emerald-400' : 'text-red-400'" x-text="modelSwitchMsg"></div>
+            <div class="space-y-2">
+              <template x-for="p in modelProviders" :key="p.name + p.model">
+                <div class="flex items-center justify-between p-3 rounded-lg border transition cursor-pointer"
+                     :class="p.model === currentModel
+                       ? 'border-hermes-500/60 bg-hermes-900/20'
+                       : 'border-gray-800 bg-gray-950 hover:border-gray-700'"
+                     @click="switchModel(p)">
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="font-medium text-sm" x-text="p.name || p.model"></span>
+                      <span x-show="p.model === currentModel" class="badge badge-accent text-xs">当前</span>
+                    </div>
+                    <div class="flex items-center gap-3 mt-1 text-xs text-gray-500">
+                      <span class="font-mono" x-text="p.model"></span>
+                      <span x-show="p.base_url" class="font-mono truncate max-w-[200px]" x-text="p.base_url"></span>
+                    </div>
+                  </div>
+                  <button x-show="p.model !== currentModel"
+                          class="btn btn-primary btn-xs">切换</button>
+                </div>
+              </template>
+            </div>
+            <details class="mt-4">
+              <summary class="text-sm text-gray-400 cursor-pointer hover:text-gray-300 transition">+ 添加新的模型提供商</summary>
+              <div class="mt-3 space-y-2 bg-gray-950 rounded-lg p-4 border border-gray-800">
+                <input x-model="newProvider.name" type="text" placeholder="名称" class="ui-input" />
+                <input x-model="newProvider.model" type="text" placeholder="模型名" class="ui-input" />
+                <input x-model="newProvider.base_url" type="text" placeholder="API Base URL" class="ui-input font-mono" />
+                <input x-model="newProvider.api_key" type="password" placeholder="API Key (可选)" class="ui-input font-mono" />
+                <div class="flex gap-2">
+                  <button @click="addProvider()" class="btn btn-primary btn-sm">添加并切换</button>
+                  <button @click="newProvider = {name:'',model:'',base_url:'',api_key:''}" class="btn btn-ghost">清空</button>
+                </div>
+              </div>
+            </details>
+          </div>
+        </div>
+
+        <!-- System Status -->
+        <div class="ui-card">
+          <div class="ui-card-header">
+            <h3>系统状态</h3>
+          </div>
+          <div class="ui-card-body">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+              <template x-for="item in statusItems" :key="item.key">
+                <div class="flex justify-between py-1.5 border-b border-gray-800/50">
+                  <span class="text-gray-400" x-text="item.label"></span>
+                  <span :class="item.ok ? 'text-emerald-400' : 'text-red-400'"
+                        x-text="item.ok ? '✓ 存在' : '✗ 缺失'"></span>
+                </div>
+              </template>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== CONFIG ==================== -->
+      <div x-show="page === 'config'" x-cloak class="p-6 space-y-6 fade-in">
+        <div class="flex items-center justify-between">
+          <h2 class="text-2xl font-bold">Configuration</h2>
+          <div class="flex gap-2">
+            <button @click="loadConfigStructured()"
+                    class="px-3 py-1.5 text-xs bg-gray-800 hover:bg-gray-700 rounded-lg transition">刷新</button>
+            <button @click="showRawConfig = !showRawConfig"
+                    class="px-3 py-1.5 text-xs rounded-lg transition"
+                    :class="showRawConfig ? 'bg-hermes-600 text-white' : 'bg-gray-800 hover:bg-gray-700'">
+              <span x-text="showRawConfig ? '收起原始文件' : '查看原始文件'"></span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Config Notification -->
+        <div x-show="configMsg" class="text-sm p-3 rounded-lg mb-4"
+             :class="configMsgOk ? 'bg-emerald-900/30 text-emerald-400 border border-emerald-800' : 'bg-red-900/30 text-red-400 border border-red-800'"
+             x-text="configMsg"></div>
+
+        <!-- Structured Config Cards -->
+        <div x-show="!showRawConfig" class="space-y-3">
+          <div x-show="configLoading" class="text-gray-500 text-sm py-4 text-center">
+            <svg class="w-5 h-5 animate-spin-slow inline-block mr-2" fill="none" viewBox="0 0 24 24"><circle class="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-70" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+            加载配置...
+          </div>
+          <template x-for="section in configSections" :key="section.id">
+            <div class="config-section cursor-pointer" @click="toggleSection(section.id)">
+              <!-- Section Header -->
+              <div class="config-section-header">
+                <div class="flex items-center gap-3">
+                  <div class="section-icon" x-text="section.icon"></div>
+                  <div>
+                    <div class="font-semibold text-sm" style="color:var(--text-primary)" x-text="section.title"></div>
+                    <div class="text-[10px] text-gray-600 font-mono" x-text="section.path.join('.')"></div>
+                  </div>
+                </div>
+                <svg class="w-4 h-4 text-gray-500 transition-transform duration-200"
+                     :class="expandedSections.includes(section.id) ? 'rotate-180' : ''"
+                     fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                </svg>
+              </div>
+
+              <!-- Section Body -->
+              <div x-show="expandedSections.includes(section.id)" x-cloak
+                   x-transition:enter="transition ease-out duration-200"
+                   x-transition:enter-start="opacity-0 -translate-y-1"
+                   x-transition:enter-end="opacity-100 translate-y-0"
+                   class="border-t p-4 space-y-3" style="border-color:var(--border-default)"
+                   @click.stop>
+
+                <!-- Object type: show key-value fields -->
+                <template x-if="section.type === 'object' || !section.type">
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <template x-for="field in section.fields" :key="field.key">
+                      <div class="config-field">
+                        <label class="text-xs" style="color:var(--text-muted)" x-text="field.label"></label>
+
+                        <!-- Text input -->
+                        <template x-if="field.type === 'text' || !field.type">
+                          <input type="text"
+                                 :value="section.value[field.key] ?? ''"
+                                 @change="updateConfigField(section, field.key, $event.target.value)"
+                                 class="ui-input font-mono text-sm"
+                                 :placeholder="'未设置'" />
+                        </template>
+
+                        <!-- Number input -->
+                        <template x-if="field.type === 'number'">
+                          <input type="number"
+                                 :value="section.value[field.key] ?? ''"
+                                 @change="updateConfigField(section, field.key, Number($event.target.value))"
+                                 class="ui-input font-mono text-sm" />
+                        </template>
+
+                        <!-- Boolean toggle -->
+                        <template x-if="field.type === 'boolean'">
+                          <button @click="updateConfigField(section, field.key, !section.value[field.key])"
+                                  class="btn text-xs"
+                                  :class="section.value[field.key] ? 'btn-success' : 'btn-ghost'"
+                                  x-text="section.value[field.key] ? '✓ 启用' : '禁用'"></button>
+                        </template>
+
+                        <!-- Select dropdown -->
+                        <template x-if="field.type === 'select'">
+                          <select @change="updateConfigField(section, field.key, $event.target.value)"
+                                  class="ui-input text-sm">
+                            <template x-for="opt in field.options" :key="opt">
+                              <option :value="opt" :selected="section.value[field.key] === opt"
+                                      x-text="opt"></option>
+                            </template>
+                          </select>
+                        </template>
+                      </div>
+                    </template>
+                  </div>
+                </template>
+
+                <!-- List type (custom_providers) -->
+                <template x-if="section.type === 'list'">
+                  <div class="space-y-2">
+                    <template x-for="(item, idx) in (section.value || [])" :key="idx">
+                      <div class="ui-card"
+                           :class="editingProvider && editingProvider.sectionId === section.id && editingProvider.idx === idx ? 'active' : ''">
+                        <div class="flex items-start justify-between mb-2">
+                          <span class="text-xs text-gray-500 font-mono" x-text="'#' + (idx+1)"></span>
+                          <div class="flex gap-1">
+                            <button @click="editProvider(section, idx)"
+                                    class="btn btn-xs"
+                                    :class="editingProvider && editingProvider.sectionId === section.id && editingProvider.idx === idx ? 'btn-success' : 'btn-ghost'"
+                                    x-text="editingProvider && editingProvider.sectionId === section.id && editingProvider.idx === idx ? '保存' : '编辑'"></button>
+                            <button @click="removeListItem(section, idx)"
+                                    class="btn btn-danger btn-xs">移除</button>
+                          </div>
+                        </div>
+
+                        <!-- Read-only view -->
+                        <div x-show="!editingProvider || editingProvider.sectionId !== section.id || editingProvider.idx !== idx"
+                             class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <div>
+                            <label class="text-xs text-gray-500">名称</label>
+                            <div class="text-sm font-mono text-gray-300 truncate" x-text="item.name || '—'"></div>
+                          </div>
+                          <div>
+                            <label class="text-xs text-gray-500">模型</label>
+                            <div class="text-sm font-mono text-hermes-400 truncate" x-text="item.model || '—'"></div>
+                          </div>
+                          <div class="md:col-span-2">
+                            <label class="text-xs text-gray-500">API URL</label>
+                            <div class="text-sm font-mono text-gray-400 truncate" x-text="item.base_url || '—'"></div>
+                          </div>
+                          <!-- API Key with show/hide and copy -->
+                          <div class="md:col-span-2" x-show="item.api_key">
+                            <label class="text-xs text-gray-500">API Key</label>
+                            <div class="flex items-center gap-2 mt-0.5">
+                              <code class="flex-1 text-sm font-mono bg-gray-900 rounded px-3 py-1.5 truncate"
+                                    x-text="providerKeyVisible[section.id + '-' + idx] ? item.api_key : '●'.repeat(Math.min((item.api_key||'').length, 32))"></code>
+                              <button @click="providerKeyVisible[section.id + '-' + idx] = !providerKeyVisible[section.id + '-' + idx]"
+                                      class="flex-shrink-0 p-1.5 rounded hover:bg-gray-800 text-gray-500 hover:text-gray-300 transition"
+                                      :title="providerKeyVisible[section.id + '-' + idx] ? '隐藏' : '显示'">
+                                <svg x-show="!providerKeyVisible[section.id + '-' + idx]" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                                <svg x-show="providerKeyVisible[section.id + '-' + idx]" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/></svg>
+                              </button>
+                              <button @click="copyProviderKey(section, idx)"
+                                      class="flex-shrink-0 p-1.5 rounded hover:bg-gray-800 text-gray-500 hover:text-hermes-400 transition"
+                                      title="复制 API Key">
+                                <svg x-show="!providerKeyCopied[section.id + '-' + idx]" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                                <svg x-show="providerKeyCopied[section.id + '-' + idx]" class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+
+                        <!-- Edit view -->
+                        <div x-show="editingProvider && editingProvider.sectionId === section.id && editingProvider.idx === idx"
+                             class="space-y-2">
+                          <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                            <div>
+                              <label class="text-xs text-gray-400 block mb-0.5">名称</label>
+                              <input type="text" x-model="editingProvider.name"
+                                     class="w-full bg-gray-900 border border-gray-800 rounded px-3 py-1.5 text-sm font-mono focus:outline-none focus:border-hermes-500" />
+                            </div>
+                            <div>
+                              <label class="text-xs text-gray-400 block mb-0.5">模型</label>
+                              <input type="text" x-model="editingProvider.model"
+                                     class="w-full bg-gray-900 border border-gray-800 rounded px-3 py-1.5 text-sm font-mono focus:outline-none focus:border-hermes-500" />
+                            </div>
+                            <div class="md:col-span-2">
+                              <label class="text-xs text-gray-400 block mb-0.5">API URL</label>
+                              <input type="text" x-model="editingProvider.base_url"
+                                     class="w-full bg-gray-900 border border-gray-800 rounded px-3 py-1.5 text-sm font-mono focus:outline-none focus:border-hermes-500" />
+                            </div>
+                          </div>
+                          <!-- API Key with show/hide and copy -->
+                          <div>
+                            <label class="text-xs text-gray-400 block mb-0.5">API Key</label>
+                            <div class="flex items-center gap-2">
+                              <input
+                                :type="providerKeyVisible[section.id + '-' + idx] ? 'text' : 'password'"
+                                x-model="editingProvider.api_key"
+                                class="flex-1 bg-gray-900 border border-gray-800 rounded px-3 py-1.5 text-sm font-mono focus:outline-none focus:border-hermes-500"
+                                placeholder="留空保持不变" />
+                              <button @click="providerKeyVisible[section.id + '-' + idx] = !providerKeyVisible[section.id + '-' + idx]"
+                                      class="flex-shrink-0 p-1.5 rounded hover:bg-gray-800 text-gray-500 hover:text-gray-300 transition"
+                                      :title="providerKeyVisible[section.id + '-' + idx] ? '隐藏' : '显示'">
+                                <svg x-show="!providerKeyVisible[section.id + '-' + idx]" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                                </svg>
+                                <svg x-show="providerKeyVisible[section.id + '-' + idx]" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>
+                                </svg>
+                              </button>
+                              <button @click="copyProviderKey(section, idx)"
+                                      class="flex-shrink-0 p-1.5 rounded hover:bg-gray-800 text-gray-500 hover:text-hermes-400 transition"
+                                      title="复制 API Key">
+                                <svg x-show="!providerKeyCopied[section.id + '-' + idx]" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                                </svg>
+                                <svg x-show="providerKeyCopied[section.id + '-' + idx]" class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                </svg>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </template>
+                    <div x-show="!section.value || section.value.length === 0" class="text-gray-500 text-sm">
+                      无数据
+                    </div>
+                  </div>
+                </template>
+
+                <!-- Raw type (other) -->
+                <template x-if="section.type === 'raw'">
+                  <div>
+                    <pre class="code-block text-xs max-h-64 overflow-y-auto scrollbar-thin"
+                         x-text="JSON.stringify(section.value, null, 2)"></pre>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </template>
+        </div>
+
+        <!-- Raw config.yaml view -->
+        <div x-show="showRawConfig" x-cloak class="bg-gray-900 rounded-xl border border-gray-800 fade-in">
+          <div class="flex items-center justify-between p-4 border-b border-gray-800">
+            <h3 class="font-semibold">config.yaml 原始内容</h3>
+            <div class="flex gap-2">
+              <button @click="loadConfig()" class="px-3 py-1.5 text-xs bg-gray-800 hover:bg-gray-700 rounded-lg transition">刷新</button>
+              <button @click="saveConfig()" class="px-3 py-1.5 text-xs bg-hermes-600 hover:bg-hermes-500 rounded-lg transition">保存</button>
+            </div>
+          </div>
+          <div class="p-4">
+            <div x-show="configLoadErr" class="text-red-400 text-sm mb-3" x-text="configLoadErr"></div>
+            <textarea
+              x-model="configRaw"
+              class="w-full h-[500px] bg-gray-950 border border-gray-800 rounded-lg p-4 font-mono text-sm text-gray-300 focus:outline-none focus:border-hermes-500 resize-y"
+              spellcheck="false"
+              placeholder="config.yaml 内容..."></textarea>
+          </div>
+        </div>
+
+        <!-- .env Section -->
+        <div class="bg-gray-900 rounded-xl border border-gray-800">
+          <div class="flex items-center justify-between p-4 border-b border-gray-800">
+            <h3 class="font-semibold flex items-center gap-2">
+              <span>🔑</span> .env (环境变量 / API Keys)
+            </h3>
+            <button @click="loadEnv()" class="px-3 py-1.5 text-xs bg-gray-800 hover:bg-gray-700 rounded-lg transition">刷新</button>
+          </div>
+          <div class="p-4">
+            <div x-show="envVars.length === 0" class="text-gray-500 text-sm">未找到 .env 文件或为空</div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <template x-for="(v, i) in envVars" :key="v.key">
+                <div class="bg-gray-950 rounded-lg p-3 border border-gray-800">
+                  <label class="text-xs text-gray-400 font-mono block mb-1" x-text="v.key"></label>
+                  <div class="flex items-center gap-2">
+                    <input
+                      :type="v.is_sensitive && !envVisibility[v.key] ? 'password' : 'text'"
+                      :value="v.value"
+                      @input="v.value = $event.target.value"
+                      class="flex-1 bg-gray-900 border border-gray-800 rounded px-3 py-1.5 text-sm font-mono focus:outline-none focus:border-hermes-500 min-w-0"
+                      :placeholder="v.is_sensitive && !envVisibility[v.key] ? '***敏感值已脱敏***' : ''" />
+                    <!-- Show/Hide toggle for sensitive fields -->
+                    <button x-show="v.is_sensitive"
+                            @click="envVisibility[v.key] = !envVisibility[v.key]"
+                            class="flex-shrink-0 p-1.5 rounded hover:bg-gray-800 text-gray-500 hover:text-gray-300 transition"
+                            :title="envVisibility[v.key] ? '隐藏' : '显示'">
+                      <svg x-show="!envVisibility[v.key]" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                      </svg>
+                      <svg x-show="envVisibility[v.key]" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>
+                      </svg>
+                    </button>
+                    <!-- Copy button -->
+                    <button @click="copyEnvVar(v)"
+                            class="flex-shrink-0 p-1.5 rounded hover:bg-gray-800 text-gray-500 hover:text-hermes-400 transition"
+                            title="复制值">
+                      <svg x-show="!envCopied[v.key]" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                      </svg>
+                      <svg x-show="envCopied[v.key]" class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== CONVERSATIONS ==================== -->
+      <div x-show="page === 'conversations'" x-cloak class="p-6 space-y-6 fade-in">
+        <h2 class="text-2xl font-bold">Conversations</h2>
+
+        <!-- Search bar -->
+        <div class="flex gap-3">
+          <input x-model="convSearch" @keydown.enter.prevent="loadConversations()"
+                 type="text" placeholder="搜索会话..."
+                 class="flex-1 bg-gray-900 border border-gray-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-hermes-500 transition" />
+          <button @click="loadConversations()" class="px-4 py-2.5 bg-gray-800 hover:bg-gray-700 rounded-xl text-sm transition">搜索</button>
+        </div>
+
+        <!-- Stats bar -->
+        <div x-show="convTotal > 0" class="flex items-center gap-4 text-sm text-gray-400">
+          <span>共 <span class="text-hermes-400 font-semibold" x-text="convTotal"></span> 个会话</span>
+          <span>共 <span class="text-hermes-400 font-semibold" x-text="convTotalTokens"></span> tokens</span>
+        </div>
+
+        <!-- Conversation List -->
+        <div class="bg-gray-900 rounded-xl border border-gray-800">
+          <div class="flex items-center justify-between p-4 border-b border-gray-800">
+            <h3 class="font-semibold">会话列表</h3>
+            <button @click="loadConversations()" class="px-3 py-1.5 text-xs bg-gray-800 hover:bg-gray-700 rounded-lg transition">刷新</button>
+          </div>
+          <div class="p-4">
+            <div x-show="convLoading" class="text-gray-500 text-sm">加载中...</div>
+            <div x-show="!convLoading && conversations.length === 0" class="text-gray-500 text-sm">
+              未找到对话记录
+            </div>
+            <div x-show="convError" class="text-red-400 text-sm" x-text="convError"></div>
+
+            <div class="space-y-2">
+              <template x-for="conv in conversations" :key="conv.id">
+                <div class="p-4 bg-gray-950 rounded-lg border border-gray-800 hover:border-hermes-600/50 transition"
+                     :class="selectedConvId === conv.id ? 'border-hermes-500/50 bg-gray-900/80' : ''">
+                  <div @click="loadConversationDetail(conv.id)" class="cursor-pointer">
+                    <div class="flex items-start justify-between gap-3">
+                      <div class="flex-1 min-w-0">
+                        <!-- Rename inline -->
+                        <div x-show="conv._renaming" @click.stop>
+                          <input x-model="conv._newTitle" @keydown.enter.stop="renameHistoryConv(conv)" @keydown.escape.stop="conv._renaming = false; conv._newTitle = conv.title || conv.first_user_msg"
+                                 class="ui-input text-sm py-1 w-full" placeholder="输入名称" x-init="$nextTick(function(){$el.focus();$el.select()})" />
+                        </div>
+                        <div x-show="!conv._renaming" class="font-medium text-sm text-gray-200 truncate"
+                             x-text="conv.title || conv.first_user_msg?.substring(0, 60) || '未命名会话'"></div>
+                        <div class="flex items-center gap-3 mt-1.5 text-xs text-gray-500">
+                          <span class="text-hermes-400" x-text="conv.model || '—'"></span>
+                          <span x-text="conv.message_count + ' 条消息'"></span>
+                          <span x-text="formatTokens(conv.input_tokens + conv.output_tokens)"></span>
+                          <span x-show="conv.estimated_cost_usd" x-text="'$' + conv.estimated_cost_usd?.toFixed(4)"></span>
+                        </div>
+                      </div>
+                      <span class="text-xs text-gray-600 whitespace-nowrap" x-text="formatTime(conv.started_at)"></span>
+                    </div>
+                  </div>
+                  <!-- Continue Chat Button -->
+                  <div class="mt-2 pt-2 border-t border-gray-800/50 flex items-center justify-between">
+                    <div class="flex items-center gap-2 min-w-0">
+                      <span class="text-xs text-gray-600 font-mono truncate max-w-[180px]" x-text="conv.id"></span>
+                      <button @click.stop="conv._renaming = true; conv._newTitle = conv.title || conv.first_user_msg || ''"
+                              class="p-1 rounded hover:bg-gray-800 text-gray-600 hover:text-hermes-400 transition"
+                              title="重命名">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+                      </button>
+                    </div>
+                    <button @click.stop="continueConversation(conv)"
+                            class="px-3 py-1 text-xs bg-hermes-600/80 hover:bg-hermes-500 text-white rounded-lg transition flex items-center gap-1.5">
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+                      继续对话
+                    </button>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </div>
+        </div>
+
+        <!-- Selected conversation messages -->
+        <div x-show="selectedConvId" class="bg-gray-900 rounded-xl border border-gray-800">
+          <div class="flex items-center justify-between p-4 border-b border-gray-800">
+            <h3 class="font-semibold">会话详情
+              <span class="text-xs text-gray-500 ml-2" x-text="'(' + selectedConvMessages.length + ' 条消息)'"></span>
+            </h3>
+            <button @click="selectedConvId = null; selectedConvMessages = []"
+                    class="px-3 py-1.5 text-xs bg-gray-800 hover:bg-gray-700 rounded-lg transition">关闭</button>
+          </div>
+          <div class="p-4 max-h-[600px] overflow-y-auto scrollbar-thin space-y-3">
+            <template x-for="msg in selectedConvMessages" :key="msg.id">
+              <div class="fade-in">
+                <!-- Role label -->
+                <div class="flex items-center gap-2 mb-1">
+                  <span class="text-xs font-semibold px-2 py-0.5 rounded-full"
+                        :class="{
+                          'bg-blue-900/50 text-blue-400': msg.role === 'user',
+                          'bg-emerald-900/50 text-emerald-400': msg.role === 'assistant',
+                          'bg-gray-800 text-gray-400': msg.role === 'system',
+                          'bg-purple-900/50 text-purple-400': msg.role === 'tool',
+                        }"
+                        x-text="msg.role"></span>
+                  <span class="text-xs text-gray-600" x-text="msg.tool_name || ''"></span>
+                  <span x-show="msg.token_count" class="text-xs text-gray-600"
+                        x-text="msg.token_count + ' tokens'"></span>
+                </div>
+                <!-- Content -->
+                <div class="pl-2 border-l-2"
+                     :class="{
+                       'border-blue-800/50': msg.role === 'user',
+                       'border-emerald-800/50': msg.role === 'assistant',
+                       'border-gray-800/50': msg.role === 'system',
+                       'border-purple-800/50': msg.role === 'tool',
+                     }">
+                  <pre class="text-sm whitespace-pre-wrap break-words"
+                       :class="{
+                         'msg-user': msg.role === 'user',
+                         'msg-assistant': msg.role === 'assistant',
+                         'msg-tool': msg.role === 'tool',
+                         'text-gray-500': msg.role === 'system',
+                       }"
+                       x-show="msg.role !== 'assistant'"
+                       x-text="(msg.content || '').substring(0, 3000) + ((msg.content||'').length > 3000 ? '\n... (截断)' : '')"></pre>
+                  <div x-show="msg.role === 'assistant'"
+                       class="markdown-body text-sm"
+                       x-html="renderMarkdown((msg.content || '').substring(0, 3000))"></div>
+                  <!-- Tool calls -->
+                  <div x-show="msg.tool_calls" class="mt-2">
+                    <details class="text-xs">
+                      <summary class="text-purple-400 cursor-pointer">工具调用</summary>
+                      <pre class="code-block mt-1 text-xs" x-text="msg.tool_calls"></pre>
+                    </details>
+                  </div>
+                  <!-- Reasoning -->
+                  <div x-show="msg.reasoning" class="mt-2">
+                    <details class="text-xs">
+                      <summary class="text-yellow-400 cursor-pointer">推理过程</summary>
+                      <pre class="code-block mt-1 text-xs text-gray-400" x-text="(msg.reasoning || '').substring(0, 2000)"></pre>
+                    </details>
+                  </div>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== CHAT ==================== -->
+      <div x-show="page === 'chat'" x-cloak class="p-8 h-full flex flex-col fade-in">
+        <!-- Header -->
+        <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center gap-2 min-w-0">
+            <button @click="showChatSessions = !showChatSessions; if(showChatSessions) loadChatSessions()"
+                    class="btn btn-ghost btn-xs flex-shrink-0" title="对话历史">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
+              对话列表
+            </button>
+            <!-- Active session title - clickable to rename -->
+            <template x-if="chatActiveSessionId">
+              <div class="flex items-center gap-1 min-w-0 max-w-[200px]" @click.stop>
+                <template x-if="!chatRenaming">
+                  <span @click="chatRenaming = true; $nextTick(function(){ $refs.chatRenameInput.focus(); $refs.chatRenameInput.select(); })"
+                        class="text-xs truncate cursor-pointer hover:text-hermes-400 transition font-medium border-b border-dashed border-transparent hover:border-hermes-400/30"
+                        x-text="chatActiveTitle || '未命名'" :title="'点击重命名'"></span>
+                </template>
+                <template x-if="chatRenaming">
+                  <input x-ref="chatRenameInput" x-model="chatRenameText"
+                         @keydown.enter.stop="renameActiveSession"
+                         @keydown.escape.stop="chatRenaming = false; chatRenameText = chatActiveTitle"
+                         @click.stop
+                         class="ui-input text-xs py-0.5 w-32" />
+                </template>
+                <span x-show="!chatRenaming" class="text-[10px] text-gray-600 font-mono flex-shrink-0" x-text="chatActiveSessionId.substring(0, 8) + '..'"></span>
+              </div>
+            </template>
+          </div>
+          <div class="flex items-center gap-3">
+            <div class="flex items-center gap-1.5 text-xs" :class="apiServerRunning ? 'text-emerald-400' : 'text-red-400'">
+              <span class="status-dot" :class="apiServerRunning ? 'online' : 'offline'"></span>
+              <span x-text="apiServerRunning ? 'API 已连接' : 'API 未运行'"></span>
+            </div>
+            <button @click="newConversation()" class="btn btn-primary btn-xs">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+              新建对话
+            </button>
+          </div>
+        </div>
+
+        <!-- Conversation Sessions Panel -->
+        <div x-show="showChatSessions"
+             x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0 -translate-y-2"
+             x-transition:enter-end="opacity-100 translate-y-0"
+             x-transition:leave="transition ease-in duration-150"
+             x-transition:leave-start="opacity-100"
+             x-transition:leave-end="opacity-0"
+             @click.outside="showChatSessions = false"
+             class="ui-card mb-4">
+          <div class="flex items-center justify-between px-4 py-2 border-b" style="border-color:var(--border-default)">
+            <span class="text-xs font-medium" style="color:var(--text-secondary)">最近对话</span>
+            <span x-show="chatSessionsLoading" class="text-[10px]" style="color:var(--text-muted)">加载中...</span>
+          </div>
+          <div class="max-h-60 overflow-y-auto scrollbar-thin">
+            <template x-if="chatSessions.length === 0 && !chatSessionsLoading">
+              <div class="px-4 py-6 text-xs text-center" style="color:var(--text-muted)">暂无对话记录</div>
+            </template>
+            <template x-for="s in chatSessions" :key="s.id">
+              <div @click="if(!s._renaming) loadChatSession(s.id)"
+                   class="flex items-center justify-between px-4 py-2.5 cursor-pointer transition border-b last:border-none group"
+                   :class="s.id === chatActiveSessionId
+                     ? 'bg-hermes-900/15 border-hermes-800/30 text-hermes-400'
+                     : 'hover:bg-gray-800/50 border-transparent text-gray-400'"
+                   style="border-color:var(--border-default)">
+                <div class="flex-1 min-w-0 mr-2">
+                  <!-- Inline rename input -->
+                  <div x-show="s._renaming" @click.stop>
+                    <input x-model="s._newTitle" @keydown.enter.stop="renameChatSession(s)" @keydown.escape.stop="s._renaming = false; s._newTitle = s.preview"
+                           class="ui-input text-xs py-1" placeholder="输入新名称" x-init="$nextTick(function(){ $el.focus(); $el.select(); })" />
+                  </div>
+                  <div x-show="!s._renaming">
+                    <div class="text-xs truncate" :class="s.id === chatActiveSessionId ? 'text-hermes-300' : 'text-gray-300'" x-text="s.preview || '(空)'"></div>
+                    <div class="text-[10px] mt-0.5" style="color:var(--text-muted)" x-text="s.time"></div>
+                  </div>
+                </div>
+                <div class="flex items-center gap-1 flex-shrink-0">
+                  <!-- Rename button -->
+                  <button @click.stop="s._renaming = true; s._newTitle = s.preview"
+                          class="p-0.5 rounded hover:bg-gray-700 text-gray-600 hover:text-hermes-400 transition opacity-0 group-hover:opacity-100"
+                          title="重命名">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+                  </button>
+                  <span x-show="s.count" class="text-[10px]" style="color:var(--text-muted)" x-text="s.count + '条'"></span>
+                  <svg x-show="s.id === chatActiveSessionId" class="w-3 h-3 text-hermes-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <!-- API down hint -->
+        <div x-show="!apiServerRunning" class="bg-amber-900/20 border border-amber-800 rounded-xl p-4 mb-4 text-sm">
+          <div class="font-medium text-amber-300 mb-1">Hermes Gateway 未运行</div>
+          <div class="text-xs text-amber-400/70">请先启动 gateway：双击 <code class="bg-amber-900/40 px-1 rounded">03启动gateway.bat</code> 或运行 <code class="bg-amber-900/40 px-1 rounded">hermes gateway</code></div>
+        </div>
+
+        <!-- Messages -->
+        <div class="flex-1 overflow-y-auto scrollbar-thin space-y-4 mb-4 min-h-0" x-ref="chatBox">
+          <template x-for="(msg, i) in chatMessages" :key="i">
+            <div :class="msg.role === 'user' ? 'flex justify-end' : 'flex justify-start'" class="fade-in">
+              <div x-show="msg.role === 'user'"
+                   class="chat-bubble-user max-w-[75%] px-4 py-3 text-sm whitespace-pre-wrap"
+                   x-text="msg.text"></div>
+              <div x-show="msg.role === 'assistant'"
+                   class="chat-bubble-assistant max-w-[85%] px-5 py-3">
+                <div class="markdown-body" :class="msg.streaming ? 'streaming-cursor' : ''"
+                     x-html="renderMarkdown(msg.text)"></div>
+                <!-- Action buttons: only show when message is complete (not streaming) -->
+                <div x-show="!msg.streaming && msg.text" class="flex items-center gap-1 mt-2 pt-2 border-t border-gray-800/40">
+                  <!-- Regenerate button -->
+                  <button @click="regenerateAnswer(msg, i)"
+                          class="p-1.5 rounded hover:bg-gray-800 text-gray-500 hover:text-hermes-400 transition"
+                          title="重新回答">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                  </button>
+                  <!-- Iteration counter (shown after regenerate) -->
+                  <span x-show="msg.iteration && msg.iteration > 0"
+                        class="text-[10px] font-mono text-gray-500 px-1.5"
+                        x-text="'#' + msg.iteration"></span>
+                  <!-- Copy button with dropdown -->
+                  <div class="relative">
+                    <button @click="copyAssistantMsg(msg, 'text')"
+                            class="p-1.5 rounded hover:bg-gray-800 text-gray-500 hover:text-hermes-400 transition"
+                            title="复制纯文本">
+                      <svg x-show="!msg._copied" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                      <svg x-show="msg._copied" class="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                    </button>
+                    <!-- Dropdown toggle arrow -->
+                    <button @click.stop="msg._copyMenu = !msg._copyMenu"
+                            class="p-0.5 rounded hover:bg-gray-800 text-gray-600 hover:text-gray-400 transition -ml-0.5"
+                            :class="msg._copyMenu ? 'text-hermes-400' : ''"
+                            title="更多复制选项">
+                      <svg class="w-2.5 h-2.5 transition-transform duration-200" :class="msg._copyMenu ? 'rotate-180' : ''" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+                    </button>
+                    <!-- Dropdown menu with transition -->
+                    <div x-show="msg._copyMenu"
+                         x-transition:enter="transition ease-out duration-150"
+                         x-transition:enter-start="opacity-0 scale-95 -translate-y-1"
+                         x-transition:enter-end="opacity-100 scale-100 translate-y-0"
+                         x-transition:leave="transition ease-in duration-100"
+                         x-transition:leave-start="opacity-100 scale-100"
+                         x-transition:leave-end="opacity-0 scale-95"
+                         @click.outside="msg._copyMenu = false"
+                         class="absolute bottom-full left-0 mb-1 flex flex-col bg-gray-800 border border-gray-700 rounded-lg shadow-xl py-1 z-50 min-w-[120px] origin-bottom-left">
+                      <button @click.stop="copyAssistantMsg(msg, 'text'); msg._copyMenu = false"
+                              class="flex items-center gap-2 px-3 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition rounded-t-lg">
+                        <svg class="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                        复制纯文本
+                      </button>
+                      <button @click.stop="copyAssistantMsg(msg, 'markdown'); msg._copyMenu = false"
+                              class="flex items-center gap-2 px-3 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition rounded-b-lg">
+                        <svg class="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+                        复制 Markdown
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div x-show="msg.role === 'system'"
+                   class="max-w-[85%] px-4 py-2 text-xs text-gray-500 italic text-center"
+                   x-text="msg.text"></div>
+            </div>
+          </template>
+          <!-- Waiting indicator — only while truly waiting for first response -->
+          <div x-show="chatLoading && !chatStreamText" class="flex justify-start fade-in">
+            <div class="chat-bubble-assistant px-5 py-3 flex items-center gap-2.5">
+              <svg class="w-4 h-4 animate-spin-slow" fill="none" viewBox="0 0 24 24"><circle class="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-70" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+              <span class="text-gray-400 text-sm">等待响应...</span>
+            </div>
+          </div>
+        </div>
+
+
+        <!-- Attachment chips -->
+        <div x-show="chatAttachments.length > 0" class="flex flex-wrap gap-2 mb-3">
+          <template x-for="(att, ai) in chatAttachments" :key="att.path">
+            <div class="flex items-center gap-2 bg-gray-800 border border-gray-700 rounded-lg pl-3 pr-1 py-1.5 text-xs group">
+              <svg class="w-3.5 h-3.5 text-hermes-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+              <span class="text-gray-300 font-mono truncate max-w-[160px]" x-text="att.name" :title="att.name"></span>
+              <button @click="chatAttachments.splice(ai, 1)"
+                      class="p-0.5 rounded hover:bg-red-900/50 text-gray-500 hover:text-red-400 transition flex-shrink-0">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
+            </div>
+          </template>
+        </div>
+
+        <!-- Input -->
+        <div class="flex gap-3">
+          <!-- File upload -->
+          <label class="btn btn-ghost self-end p-3 cursor-pointer" :class="chatLoading ? 'opacity-40 pointer-events-none' : ''" title="上传文件给 Hermes">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
+            <input type="file" @change="uploadChatFile($event)" class="hidden" :disabled="chatLoading" />
+          </label>
+          <textarea
+            x-model="chatInput"
+            @keydown.enter.prevent="if(!$event.shiftKey) sendChat()"
+            rows="1"
+            placeholder="输入消息... (Enter 发送, Shift+Enter 换行)"
+            :disabled="chatLoading || !apiServerRunning"
+            class="flex-1 bg-gray-900 border border-gray-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-hermes-500 transition resize-none"
+            style="min-height:44px;max-height:120px"
+            @input="$el.style.height='auto';$el.style.height=Math.min($el.scrollHeight,120)+'px'"
+          ></textarea>
+          <button @click="sendChat()" :disabled="chatLoading || (!chatInput.trim() && chatAttachments.length === 0) || !apiServerRunning"
+                  class="btn btn-primary self-end px-6 py-3">
+            <span x-show="!chatLoading">发送</span>
+            <span x-show="chatLoading" class="flex items-center gap-1.5">
+              <svg class="w-4 h-4 animate-spin-slow" fill="none" viewBox="0 0 24 24"><circle class="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-70" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+              生成中
+            </span>
+          </button>
+        </div>
+      </div>
+
+      <!-- ==================== SKILLS ==================== -->
+      <div x-show="page === 'skills'" x-cloak class="p-6 space-y-6 fade-in">
+        <!-- Header -->
+        <div class="flex items-center justify-between">
+          <h2 class="text-2xl font-bold">Skills</h2>
+          <div class="flex gap-2">
+            <button @click="showSkillCreate = true; showSkillImport = false"
+                    class="px-4 py-2 text-sm bg-emerald-600/80 hover:bg-emerald-500 rounded-lg transition flex items-center gap-1.5">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+              新建技能
+            </button>
+            <button @click="showSkillImport = true; showSkillCreate = false"
+                    class="px-4 py-2 text-sm bg-hermes-600/80 hover:bg-hermes-500 rounded-lg transition flex items-center gap-1.5">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+              导入技能
+            </button>
+          </div>
+        </div>
+
+        <!-- Notification -->
+        <div x-show="skillNotifyMsg" class="text-sm p-3 rounded-lg"
+             :class="skillNotifyOk ? 'bg-emerald-900/30 text-emerald-400 border border-emerald-800' : 'bg-red-900/30 text-red-400 border border-red-800'"
+             x-text="skillNotifyMsg"></div>
+
+        <!-- Create New Skill Form -->
+        <div x-show="showSkillCreate" x-cloak class="bg-gray-900 rounded-xl border border-gray-800 p-5 space-y-3 fade-in">
+          <h3 class="font-semibold">新建技能</h3>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="text-xs text-gray-400 mb-1 block">分类</label>
+              <input x-model="newSkill.category" type="text" placeholder="如: software-development"
+                     class="w-full bg-gray-950 border border-gray-800 rounded px-3 py-2 text-sm font-mono focus:outline-none focus:border-hermes-500" />
+            </div>
+            <div>
+              <label class="text-xs text-gray-400 mb-1 block">技能名称</label>
+              <input x-model="newSkill.name" type="text" placeholder="如: my-awesome-skill"
+                     class="w-full bg-gray-950 border border-gray-800 rounded px-3 py-2 text-sm font-mono focus:outline-none focus:border-hermes-500" />
+            </div>
+          </div>
+          <div>
+            <label class="text-xs text-gray-400 mb-1 block">SKILL.md 内容（留空则生成模板）</label>
+            <textarea x-model="newSkill.content" rows="8"
+                      class="w-full bg-gray-950 border border-gray-800 rounded px-3 py-2 text-sm font-mono focus:outline-none focus:border-hermes-500 resize-y"
+                      placeholder="---&#10;title: &quot;My Skill&quot;&#10;summary: &quot;...&quot;&#10;---&#10;&#10;# My Skill&#10;&#10;Description..."></textarea>
+          </div>
+          <div class="flex gap-2">
+            <button @click="createSkill()" class="px-4 py-2 text-sm bg-emerald-600 hover:bg-emerald-500 rounded-lg transition">创建</button>
+            <button @click="showSkillCreate = false" class="px-4 py-2 text-sm bg-gray-800 hover:bg-gray-700 rounded-lg transition">取消</button>
+          </div>
+        </div>
+
+        <!-- Import Skill Form -->
+        <div x-show="showSkillImport" x-cloak class="bg-gray-900 rounded-xl border border-gray-800 p-5 space-y-3 fade-in">
+          <h3 class="font-semibold">导入技能</h3>
+          <p class="text-xs text-gray-400">支持 ZIP 文件或单个 SKILL.md 文件</p>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="text-xs text-gray-400 mb-1 block">目标分类</label>
+              <input x-model="importSkill.category" type="text" placeholder="如: productivity"
+                     class="w-full bg-gray-950 border border-gray-800 rounded px-3 py-2 text-sm font-mono focus:outline-none focus:border-hermes-500" />
+            </div>
+            <div>
+              <label class="text-xs text-gray-400 mb-1 block">技能名称</label>
+              <input x-model="importSkill.name" type="text" placeholder="如: imported-skill"
+                     class="w-full bg-gray-950 border border-gray-800 rounded px-3 py-2 text-sm font-mono focus:outline-none focus:border-hermes-500" />
+            </div>
+          </div>
+          <div>
+            <label class="text-xs text-gray-400 mb-1 block">选择文件</label>
+            <input type="file" accept=".zip,.md" @change="importSkillFile = $event.target.files[0]"
+                   class="w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:bg-hermes-600 file:text-white hover:file:bg-hermes-500 file:cursor-pointer" />
+          </div>
+          <div class="flex gap-2">
+            <button @click="importSkill()" :disabled="!importSkillFile" class="px-4 py-2 text-sm bg-hermes-600 hover:bg-hermes-500 disabled:opacity-50 rounded-lg transition">导入</button>
+            <button @click="showSkillImport = false; importSkillFile = null" class="px-4 py-2 text-sm bg-gray-800 hover:bg-gray-700 rounded-lg transition">取消</button>
+          </div>
+        </div>
+
+        <!-- Category filter + Search -->
+        <div class="flex flex-wrap items-center gap-2">
+          <input x-model="skillSearch" type="text" placeholder="搜索技能..."
+                 class="bg-gray-900 border border-gray-800 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-hermes-500 w-48" />
+          <button @click="skillFilter = ''"
+                  :class="skillFilter === '' ? 'bg-hermes-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'"
+                  class="px-3 py-1 text-xs rounded-lg transition">全部</button>
+          <template x-for="cat in skillCategories" :key="cat">
+            <button @click="skillFilter = cat"
+                    :class="skillFilter === cat ? 'bg-hermes-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'"
+                    class="px-3 py-1 text-xs rounded-lg transition"
+                    x-text="cat"></button>
+          </template>
+        </div>
+
+        <!-- Skill Cards Grid (hidden when editing/viewing detail/deleting) -->
+        <div x-show="!editingSkill && !selectedSkill && !deletingSkill" class="bg-gray-900 rounded-xl border border-gray-800">
+          <div class="flex items-center justify-between p-4 border-b border-gray-800">
+            <h3 class="font-semibold">
+              已安装技能 (<span x-text="filteredSkills.length"></span>)
+            </h3>
+            <button @click="loadSkills()" class="px-3 py-1.5 text-xs bg-gray-800 hover:bg-gray-700 rounded-lg transition">刷新</button>
+          </div>
+          <div class="p-4">
+            <div x-show="skillsLoading" class="text-gray-500 text-sm">加载中...</div>
+            <div x-show="!skillsLoading && filteredSkills.length === 0" class="text-gray-500 text-sm">
+              未找到已安装的技能
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+              <template x-for="skill in filteredSkills" :key="skill.category + '/' + skill.name">
+                <div class="p-4 bg-gray-950 rounded-lg border transition"
+                     :class="selectedSkill?.name === skill.name && selectedSkill?.category === skill.category ? 'border-hermes-500/50 ring-1 ring-hermes-500/20' : 'border-gray-800 hover:border-gray-700'">
+                  <!-- Card header: click to view detail -->
+                  <div @click="viewSkillDetail(skill)" class="cursor-pointer">
+                    <div class="flex items-center justify-between mb-2">
+                      <span class="font-medium text-sm truncate mr-2" x-text="skill.title || skill.name"></span>
+                      <span :class="skill.enabled ? 'bg-emerald-900/50 text-emerald-400' : 'bg-gray-800 text-gray-500'"
+                            class="text-xs px-2 py-0.5 rounded-full flex-shrink-0"
+                            x-text="skill.enabled ? '启用' : '禁用'"></span>
+                    </div>
+                    <div class="text-xs text-hermes-400/60 mb-1" x-text="skill.category + ' / ' + skill.name"></div>
+                    <p class="text-xs text-gray-500 line-clamp-2" x-text="skill.summary || skill.description || '无描述'"></p>
+                  </div>
+                  <!-- Card actions -->
+                  <div class="mt-3 pt-2 border-t border-gray-800/50 flex items-center justify-between">
+                    <button @click.stop="toggleSkill(skill)"
+                            class="text-xs px-2 py-1 rounded transition"
+                            :class="skill.enabled ? 'bg-red-900/30 text-red-400 hover:bg-red-800/30' : 'bg-emerald-900/30 text-emerald-400 hover:bg-emerald-800/30'"
+                            x-text="skill.enabled ? '禁用' : '启用'"></button>
+                    <div class="flex gap-1">
+                      <button @click.stop="startEditSkill(skill)"
+                              class="text-xs px-2 py-1 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded transition">编辑</button>
+                      <button @click.stop="confirmDeleteSkill(skill)"
+                              class="text-xs px-2 py-1 bg-red-900/30 hover:bg-red-800/30 text-red-400 rounded transition">删除</button>
+                    </div>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </div>
+        </div>
+
+        <!-- Skill Detail Panel -->
+        <div x-show="selectedSkill && !editingSkill" x-cloak class="bg-gray-900 rounded-xl border border-gray-800 fade-in">
+          <div class="flex items-center justify-between p-4 border-b border-gray-800">
+            <div>
+              <h3 class="font-semibold" x-text="selectedSkill?.title || selectedSkill?.name || ''"></h3>
+              <div class="text-xs text-gray-500 mt-0.5">
+                <span x-text="selectedSkill?.category + ' / ' + selectedSkill?.name"></span>
+                <span x-show="selectedSkill?.agent_created" class="ml-2 text-emerald-400">Agent 创建</span>
+              </div>
+            </div>
+            <div class="flex gap-2">
+              <button @click="startEditSkill(selectedSkill)"
+                      class="px-3 py-1.5 text-xs bg-hermes-600/80 hover:bg-hermes-500 rounded-lg transition">编辑 SKILL.md</button>
+              <button @click="selectedSkill = null"
+                      class="px-3 py-1.5 text-xs bg-gray-800 hover:bg-gray-700 rounded-lg transition">← 返回列表</button>
+            </div>
+          </div>
+          <div class="p-4">
+            <!-- Files list -->
+            <div x-show="selectedSkill?.all_files?.length > 0" class="mb-4">
+              <div class="text-xs text-gray-400 mb-2">文件列表：</div>
+              <div class="flex flex-wrap gap-2">
+                <template x-for="f in selectedSkill?.all_files || []" :key="f.path">
+                  <span class="text-xs font-mono bg-gray-950 border border-gray-800 rounded px-2 py-1"
+                        x-text="f.path + ' (' + formatFileSize(f.size) + ')'"></span>
+                </template>
+              </div>
+            </div>
+            <!-- Rendered SKILL.md content -->
+            <div class="markdown-body text-sm bg-gray-950 rounded-lg p-4 border border-gray-800 max-h-[500px] overflow-y-auto scrollbar-thin"
+                 x-html="renderMarkdown(selectedSkill?.content || '*无 SKILL.md 内容*')"></div>
+          </div>
+        </div>
+
+        <!-- Skill Edit Panel -->
+        <div x-show="editingSkill" x-cloak class="bg-gray-900 rounded-xl border border-hermes-500/30 p-5 space-y-3 fade-in">
+          <div class="flex items-center justify-between">
+            <h3 class="font-semibold">
+              编辑: <span class="text-hermes-400" x-text="editingSkill?.category + '/' + editingSkill?.name"></span>
+            </h3>
+            <div class="flex gap-2">
+              <button @click="saveSkillContent()"
+                      class="px-4 py-1.5 text-sm bg-emerald-600 hover:bg-emerald-500 rounded-lg transition">保存</button>
+              <button @click="editingSkill = null"
+                      class="px-4 py-1.5 text-sm bg-gray-800 hover:bg-gray-700 rounded-lg transition">← 返回列表</button>
+            </div>
+          </div>
+          <textarea x-model="editingContent" rows="24"
+                    class="w-full bg-gray-950 border border-gray-800 rounded-lg p-4 font-mono text-sm text-gray-300 focus:outline-none focus:border-hermes-500 resize-y"
+                    spellcheck="false"></textarea>
+          <div class="text-xs text-gray-500">
+            <span x-text="editingContent.length"></span> 字符 |
+            <span x-text="editingContent.split('\n').length"></span> 行
+          </div>
+        </div>
+
+        <!-- Delete Confirmation -->
+        <div x-show="deletingSkill" x-cloak class="bg-red-900/20 rounded-xl border border-red-800 p-5 fade-in">
+          <h3 class="font-semibold text-red-400 mb-2">确认删除</h3>
+          <p class="text-sm text-gray-300 mb-3">
+            确定要删除技能 <strong class="text-red-300" x-text="deletingSkill?.category + '/' + deletingSkill?.name"></strong> 吗？
+            <br/><span class="text-xs text-gray-500">此操作不可恢复，将删除整个技能目录。</span>
+          </p>
+          <div class="flex gap-2">
+            <button @click="deleteSkill()"
+                    class="px-4 py-2 text-sm bg-red-600 hover:bg-red-500 rounded-lg transition">确认删除</button>
+            <button @click="deletingSkill = null"
+                    class="px-4 py-2 text-sm bg-gray-800 hover:bg-gray-700 rounded-lg transition">取消</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== CRON ==================== -->
+      <div x-show="page === 'cron'" x-cloak class="p-6 space-y-6 fade-in">
+        <h2 class="text-2xl font-bold">Cron Jobs</h2>
+
+        <div class="bg-gray-900 rounded-xl border border-gray-800">
+          <div class="flex items-center justify-between p-4 border-b border-gray-800">
+            <h3 class="font-semibold">定时任务 (<span x-text="cronJobs.length"></span>)</h3>
+            <button @click="loadCron()" class="px-3 py-1.5 text-xs bg-gray-800 hover:bg-gray-700 rounded-lg transition">刷新</button>
+          </div>
+          <div class="p-4">
+            <div x-show="cronLoading" class="text-gray-500 text-sm">加载中...</div>
+            <div x-show="!cronLoading && cronJobs.length === 0" class="text-gray-500 text-sm">
+              未找到定时任务
+            </div>
+
+            <div class="space-y-3">
+              <template x-for="job in cronJobs" :key="job._filename">
+                <div @click="selectedCron = job"
+                     :class="selectedCron?._filename === job._filename ? 'border-hermes-500/50' : ''"
+                     class="p-4 bg-gray-950 rounded-lg border border-gray-800 hover:border-hermes-600/50 cursor-pointer transition">
+                  <div class="flex items-center justify-between mb-1">
+                    <span class="font-medium text-sm font-mono" x-text="job._filename"></span>
+                    <span class="text-xs text-gray-500" x-text="job._modified"></span>
+                  </div>
+                  <p class="text-xs text-gray-400 truncate" x-text="job.prompt || job.name || JSON.stringify(job).substring(0, 150)"></p>
+                </div>
+              </template>
+            </div>
+          </div>
+        </div>
+
+        <div x-show="selectedCron" class="bg-gray-900 rounded-xl border border-gray-800">
+          <div class="flex items-center justify-between p-4 border-b border-gray-800">
+            <h3 class="font-semibold" x-text="'任务详情: ' + (selectedCron?._filename || '')"></h3>
+            <button @click="selectedCron = null" class="px-3 py-1.5 text-xs bg-gray-800 hover:bg-gray-700 rounded-lg transition">关闭</button>
+          </div>
+          <div class="p-4">
+            <pre class="code-block text-xs max-h-96 overflow-y-auto scrollbar-thin"
+                 x-text="JSON.stringify(selectedCron, null, 2)"></pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== LOGS ==================== -->
+      <div x-show="page === 'logs'" x-cloak class="p-6 space-y-6 fade-in">
+        <h2 class="text-2xl font-bold">Logs</h2>
+
+        <div class="bg-gray-900 rounded-xl border border-gray-800">
+          <div class="flex items-center justify-between p-4 border-b border-gray-800">
+            <h3 class="font-semibold">日志文件</h3>
+            <button @click="loadLogs()" class="px-3 py-1.5 text-xs bg-gray-800 hover:bg-gray-700 rounded-lg transition">刷新</button>
+          </div>
+          <div class="p-4">
+            <div x-show="logLoading" class="text-gray-500 text-sm">加载中...</div>
+            <div x-show="!logLoading && logFiles.length === 0" class="text-gray-500 text-sm">
+              未找到日志文件
+            </div>
+
+            <div class="space-y-2">
+              <template x-for="log in logFiles" :key="log.name">
+                <div @click="loadLogContent(log.name)"
+                     class="flex items-center justify-between p-3 bg-gray-950 rounded-lg border border-gray-800 hover:border-hermes-600/50 cursor-pointer transition">
+                  <span class="text-sm font-mono" x-text="log.name"></span>
+                  <div class="flex items-center gap-3">
+                    <span class="text-xs text-gray-500" x-text="log.size_human"></span>
+                    <span class="text-xs text-gray-600" x-text="log.modified"></span>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </div>
+        </div>
+
+        <div x-show="logContent !== null" class="bg-gray-900 rounded-xl border border-gray-800">
+          <div class="flex items-center justify-between p-4 border-b border-gray-800">
+            <h3 class="font-semibold" x-text="'日志: ' + (logContentName || '')"></h3>
+            <button @click="logContent = null" class="px-3 py-1.5 text-xs bg-gray-800 hover:bg-gray-700 rounded-lg transition">关闭</button>
+          </div>
+          <div class="p-4">
+            <pre class="code-block text-xs max-h-[32rem] overflow-y-auto scrollbar-thin whitespace-pre-wrap"
+                 x-text="logContent"></pre>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- ============ App Logic ============ -->
+  <script>
+    function app() {
+      return {
+        page: 'dashboard',
+        nav: [
+          { id: 'dashboard',     label: '仪表盘',     icon: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5zm10 0a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zm10 0a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"/></svg>' },
+          { id: 'config',        label: '配置管理',     icon: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>' },
+          { id: 'conversations', label: '对话历史',     icon: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>' },
+          { id: 'chat',          label: '在线对话',     icon: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>' },
+          { id: 'skills',        label: '技能管理',     icon: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/></svg>' },
+          { id: 'cron',          label: '定时任务',     icon: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>' },
+          { id: 'logs',          label: '日志查看',     icon: '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>' },
+        ],
+
+        // Dashboard
+        status: {},
+        currentModel: '',
+        modelProviders: [],
+        modelSwitchMsg: '',
+        modelSwitchOk: false,
+        newProvider: { name: '', model: '', base_url: '', api_key: '' },
+        // Health monitoring
+        gatewayStatus: 'unknown',
+        toastMsg: '',
+        toastOk: true,
+        _lastGatewayStatus: null,
+        get statusItems() {
+          const s = this.status;
+          return [
+            { key: 'home',    label: 'Hermes Home',  ok: s.hermes_home_exists },
+            { key: 'config',  label: 'config.yaml',  ok: s.config_yaml_exists },
+            { key: 'env',     label: '.env',         ok: s.env_exists },
+            { key: 'db',      label: 'state.db',     ok: s.state_db_exists },
+            { key: 'skills',  label: 'skills/',      ok: s.skills_dir_exists },
+            { key: 'cron',    label: 'cron/',        ok: s.cron_dir_exists },
+            { key: 'logs',    label: 'logs/',        ok: s.logs_dir_exists },
+            { key: 'soul',    label: 'SOUL.md',      ok: s.soul_md_exists },
+          ];
+        },
+
+        // Config
+        configRaw: '',
+        configLoadErr: '',
+        configSections: [],
+        configLoading: false,
+        showRawConfig: false,
+        expandedSections: [],
+        envVars: [],
+        envVisibility: {},
+        envCopied: {},
+
+        // Conversations
+        conversations: [],
+        convLoading: false,
+        convError: '',
+        convSearch: '',
+        convTotal: 0,
+        convTotalTokens: 0,
+        selectedConvId: null,
+        selectedConvMessages: [],
+        dbSchema: null,
+
+        // Chat
+        chatMessages: [],
+        chatInput: '',
+        chatLoading: false,
+        hermesPath: null,
+        apiServerRunning: false,
+        chatStreamText: '',
+        chatAttachments: [],
+        chatSessions: [],
+        chatSessionsLoading: false,
+        showChatSessions: false,
+        chatActiveSessionId: null,
+        chatActiveTitle: '',
+        chatRenaming: false,
+        chatRenameText: '',
+
+        // Skills
+        skills: [],
+        skillCategories: [],
+        skillFilter: '',
+        skillSearch: '',
+        skillsLoading: false,
+        selectedSkill: null,
+        editingSkill: null,
+        editingContent: '',
+        deletingSkill: null,
+        showSkillCreate: false,
+        showSkillImport: false,
+        newSkill: { category: '', name: '', content: '' },
+        importSkill: { category: '', name: '' },
+        importSkillFile: null,
+        skillNotifyMsg: '',
+        skillNotifyOk: false,
+        get filteredSkills() {
+          let list = this.skills;
+          if (this.skillFilter) {
+            list = list.filter(s => s.category === this.skillFilter);
+          }
+          if (this.skillSearch) {
+            const q = this.skillSearch.toLowerCase();
+            list = list.filter(s =>
+              (s.title || '').toLowerCase().includes(q) ||
+              (s.name || '').toLowerCase().includes(q) ||
+              (s.category || '').toLowerCase().includes(q) ||
+              (s.summary || '').toLowerCase().includes(q) ||
+              (s.description || '').toLowerCase().includes(q)
+            );
+          }
+          return list;
+        },
+
+        // Cron
+        cronJobs: [],
+        cronLoading: false,
+        selectedCron: null,
+
+        // Logs
+        logFiles: [],
+        logLoading: false,
+        logContent: null,
+        logContentName: '',
+
+        // ========== Init ==========
+        _loaded: {},  // track which pages have been loaded
+        async init() {
+          // marked.js + hljs configured in <script> block at top of page
+          await this.loadStatus();
+          this.loadConfig();
+          this.loadEnv();
+          this.loadModels();
+          this.checkHermes();
+          this.checkApiServer();
+          this.monitorHealth();
+          // Poll health every 10s
+          setInterval(() => this.monitorHealth(), 10000);
+          // Watch page changes and auto-load data
+          this.$watch('page', (val) => {
+            if (this._loaded[val]) return;
+            this._loaded[val] = true;
+            switch(val) {
+              case 'config':         this.loadConfigStructured(); break;
+              case 'conversations': this.loadConversations(); break;
+              case 'skills':        this.loadSkills(); break;
+              case 'cron':          this.loadCron(); break;
+              case 'logs':          this.loadLogs(); break;
+            }
+          });
+        },
+
+        // ========== Helpers ==========
+        renderMarkdown(text) {
+          if (!text) return '';
+          try {
+            const r = new marked.Renderer();
+            r.code = function(obj) {
+              const code = typeof obj === 'object' ? obj.text : obj;
+              const lang = typeof obj === 'object' ? obj.lang : arguments[1];
+              const map = {js:'javascript',py:'python',sh:'bash',ts:'typescript',yml:'yaml'};
+              const lg = (lang || '').toLowerCase();
+              const mapped = map[lg] || lg;
+              let hl = code;
+              if (typeof hljs !== 'undefined') {
+                if (mapped && hljs.getLanguage(mapped)) {
+                  hl = hljs.highlight(code, {language: mapped}).value;
+                } else {
+                  hl = hljs.highlightAuto(code).value;
+                }
+              }
+              return '<div class="code-wrap relative mb-3 rounded-lg overflow-hidden border border-gray-800">'
+                + '<div class="flex items-center justify-between px-4 py-1.5 bg-gray-900 border-b border-gray-800">'
+                + '<span class="text-[11px] text-gray-500 font-mono">' + (lang || 'text') + '</span>'
+                + '<span class="copy-btn text-[11px] text-gray-500 hover:text-hermes-400 transition flex items-center gap-1 cursor-pointer select-none"'
+                + ' data-code="' + encodeURIComponent(code) + '">'
+                + '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>复制代码</span>'
+                + '</div>'
+                + '<pre><code class="hljs language-' + (lang || 'text') + '">' + hl + '</code></pre>'
+                + '</div>';
+            };
+            return marked.parse(text, { renderer: r, breaks: true, gfm: true });
+          } catch(e) { return text; }
+        },
+
+        async checkApiServer() {
+          try {
+            const data = await this.api('/chat/status');
+            this.apiServerRunning = data.running || false;
+          } catch (e) {
+            this.apiServerRunning = false;
+          }
+        },
+        async monitorHealth() {
+          try {
+            const data = await this.api('/health/monitor');
+            const prev = this._lastGatewayStatus;
+            this.gatewayStatus = data.gateway || 'unknown';
+            this.apiServerRunning = data.gateway === 'connected';
+            // Show global toast on status change
+            if (prev && prev !== this.gatewayStatus) {
+              if (this.gatewayStatus === 'connected') {
+                this.showToast('✅ Gateway 已重新连接', true);
+              } else if (this.gatewayStatus === 'disconnected') {
+                this.showToast('⚠️ Gateway 已断开连接', false);
+              } else if (this.gatewayStatus === 'timeout') {
+                this.showToast('⏱️ Gateway 连接超时', false);
+              }
+            }
+            this._lastGatewayStatus = this.gatewayStatus;
+          } catch (e) {
+            this.gatewayStatus = 'unknown';
+          }
+        },
+        showToast(msg, ok) {
+          this.toastMsg = msg;
+          this.toastOk = ok;
+          clearTimeout(this._toastTimer);
+          this._toastTimer = setTimeout(() => { this.toastMsg = ''; }, 5000);
+        },
+        async api(path, opts = {}) {
+          const res = await fetch('/api' + path, {
+            headers: { 'Content-Type': 'application/json' },
+            ...opts,
+          });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({ detail: res.statusText }));
+            throw new Error(err.detail || res.statusText);
+          }
+          return await res.json();
+        },
+
+        formatTime(ts) {
+          if (!ts) return '';
+          // ts is a Unix timestamp (float)
+          const d = new Date(ts * 1000);
+          const now = new Date();
+          const diffMs = now - d;
+          const diffDays = Math.floor(diffMs / 86400000);
+
+          const time = d.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+
+          if (diffDays === 0) return '今天 ' + d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+          if (diffDays === 1) return '昨天 ' + d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+          if (diffDays < 7) return diffDays + '天前';
+          return time;
+        },
+
+        formatTokens(n) {
+          if (!n) return '0';
+          if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+          if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+          return String(n);
+        },
+
+        // ========== Dashboard ==========
+        async loadStatus() {
+          try {
+            this.status = await this.api('/status');
+          } catch (e) {
+            this.status = { error: e.message };
+          }
+        },
+
+        // ========== Models ==========
+        async loadModels() {
+          try {
+            const data = await this.api('/models');
+            this.currentModel = data.current || '';
+            this.modelProviders = data.providers || [];
+          } catch (e) {
+            this.modelProviders = [];
+          }
+        },
+        async switchModel(provider) {
+          this.modelSwitchMsg = '';
+          try {
+            const data = await this.api('/models/switch', {
+              method: 'PUT',
+              body: JSON.stringify({
+                model: provider.model,
+                provider: provider.provider || 'custom',
+                base_url: provider.base_url || '',
+              }),
+            });
+            this.currentModel = data.current_model;
+            this.modelSwitchOk = true;
+            this.modelSwitchMsg = '✓ 已切换到 ' + data.current_model;
+            this.status.current_model = data.current_model;
+            setTimeout(() => { this.modelSwitchMsg = ''; }, 3000);
+          } catch (e) {
+            this.modelSwitchOk = false;
+            this.modelSwitchMsg = '切换失败: ' + e.message;
+          }
+        },
+        async addProvider() {
+          const p = this.newProvider;
+          if (!p.model || !p.base_url) {
+            this.modelSwitchOk = false;
+            this.modelSwitchMsg = '请填写模型名和 API Base URL';
+            return;
+          }
+          try {
+            await this.api('/models/providers', {
+              method: 'POST',
+              body: JSON.stringify(p),
+            });
+            this.newProvider = { name: '', model: '', base_url: '', api_key: '' };
+            await this.loadModels();
+            this.modelSwitchOk = true;
+            this.modelSwitchMsg = '✓ 提供商已添加';
+            setTimeout(() => { this.modelSwitchMsg = ''; }, 3000);
+          } catch (e) {
+            this.modelSwitchOk = false;
+            this.modelSwitchMsg = '添加失败: ' + e.message;
+          }
+        },
+
+        // ========== Config ==========
+        async loadConfig() {
+          try {
+            this.configLoadErr = '';
+            const data = await this.api('/config');
+            this.configRaw = data.raw || (data.config ? JSON.stringify(data.config, null, 2) : '');
+          } catch (e) {
+            this.configLoadErr = e.message;
+          }
+        },
+        async saveConfig() {
+          try {
+            let config;
+            try { config = JSON.parse(this.configRaw); }
+            catch { alert('请输入有效的 JSON 格式'); return; }
+            await this.api('/config', { method: 'PUT', body: JSON.stringify({ config }) });
+            alert('配置已保存');
+            await this.loadConfig();
+          } catch (e) { alert('保存失败: ' + e.message); }
+        },
+        async loadEnv() {
+          try {
+            const data = await this.api('/config/env');
+            this.envVars = data.variables || [];
+          } catch (e) { this.envVars = []; }
+        },
+        async copyEnvVar(v) {
+          try {
+            await navigator.clipboard.writeText(v.value);
+            this.envCopied[v.key] = true;
+            setTimeout(() => { this.envCopied[v.key] = false; }, 2000);
+          } catch (e) {
+            // Fallback for older browsers
+            const ta = document.createElement('textarea');
+            ta.value = v.value;
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            this.envCopied[v.key] = true;
+            setTimeout(() => { this.envCopied[v.key] = false; }, 2000);
+          }
+        },
+
+        // Structured Config
+        async loadConfigStructured() {
+          this.configLoading = true;
+          try {
+            const data = await this.api('/config/structured');
+            this.configSections = data.sections || [];
+            // Auto-expand first 3 sections
+            this.expandedSections = this.configSections.slice(0, 3).map(s => s.id);
+          } catch (e) {
+            this.configSections = [];
+          }
+          this.configLoading = false;
+        },
+        toggleSection(id) {
+          const idx = this.expandedSections.indexOf(id);
+          if (idx >= 0) {
+            this.expandedSections.splice(idx, 1);
+          } else {
+            this.expandedSections.push(id);
+          }
+        },
+        async updateConfigField(section, key, value) {
+          // Build the update payload
+          const path = [...section.path];
+          // For object type, we update the full object with one field changed
+          const newValue = { ...(section.value || {}) };
+          if (value === null || value === '' || value === undefined) {
+            delete newValue[key];
+          } else {
+            newValue[key] = value;
+          }
+          try {
+            await this.api('/config/section', {
+              method: 'PUT',
+              body: JSON.stringify({
+                section_id: section.id,
+                path: path,
+                value: newValue,
+              }),
+            });
+            // Update local state
+            section.value = newValue;
+            this.showConfigMsg('✓ 已更新 ' + section.title + ' / ' + key, true);
+          } catch (e) {
+            this.showConfigMsg('保存失败: ' + e.message, false);
+          }
+        },
+        async removeListItem(section, idx) {
+          const newValue = [...(section.value || [])];
+          newValue.splice(idx, 1);
+          try {
+            await this.api('/config/section', {
+              method: 'PUT',
+              body: JSON.stringify({
+                section_id: section.id,
+                path: section.path,
+                value: newValue,
+              }),
+            });
+            section.value = newValue;
+            this.showConfigMsg('✓ 已移除', true);
+          } catch (e) {
+            this.showConfigMsg('操作失败: ' + e.message, false);
+          }
+        },
+        editProvider(section, idx) {
+          // If already editing this provider, save it
+          if (this.editingProvider && this.editingProvider.sectionId === section.id && this.editingProvider.idx === idx) {
+            this.saveProvider(section, idx);
+            return;
+          }
+          // Otherwise, enter edit mode
+          const item = section.value[idx] || {};
+          this.editingProvider = {
+            sectionId: section.id,
+            idx: idx,
+            name: item.name || '',
+            model: item.model || '',
+            base_url: item.base_url || '',
+            api_key: item.api_key || '',
+          };
+        },
+        async saveProvider(section, idx) {
+          // Build updated values from edit state or fallback to current section data
+          const edit = this.editingProvider;
+          const item = (section.value || [])[idx] || {};
+          const newValue = [...(section.value || [])];
+          const updated = {
+            name: (edit && edit.name) || item.name || '',
+            model: (edit && edit.model) || item.model || '',
+            base_url: (edit && edit.base_url) || item.base_url || '',
+            api_key: (edit && edit.api_key && edit.api_key.trim()) || item.api_key || '',
+          };
+          newValue[idx] = updated;
+          try {
+            await this.api('/config/section', {
+              method: 'PUT',
+              body: JSON.stringify({
+                section_id: section.id,
+                path: section.path,
+                value: newValue,
+              }),
+            });
+            section.value = newValue;
+            this.editingProvider = null;
+            this.showConfigMsg('✓ 已保存 ' + updated.name, true);
+          } catch (e) {
+            this.showConfigMsg('保存失败: ' + e.message, false);
+          }
+        },
+        copyProviderKey(section, idx) {
+          const item = section.value[idx];
+          const key = item?.api_key || '';
+          if (!key) {
+            this.showConfigMsg('⚠️ 无 API Key 可复制', false);
+            return;
+          }
+          try {
+            navigator.clipboard.writeText(key);
+          } catch(e) {
+            const ta = document.createElement('textarea');
+            ta.value = key;
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+          }
+          this.providerKeyCopied[section.id + '-' + idx] = true;
+          setTimeout(() => { this.providerKeyCopied[section.id + '-' + idx] = false; }, 2000);
+        },
+        configMsg: '',
+        configMsgOk: false,
+        editingProvider: null,
+        providerKeyVisible: {},
+        providerKeyCopied: {},
+        showConfigMsg(msg, ok) {
+          this.configMsg = msg;
+          this.configMsgOk = ok;
+          setTimeout(() => { this.configMsg = ''; }, 3000);
+        },
+
+        // ========== Conversations ==========
+        async loadConversations() {
+          this.convLoading = true;
+          this.convError = '';
+          try {
+            const params = new URLSearchParams({ limit: '100' });
+            if (this.convSearch) params.set('search', this.convSearch);
+            const data = await this.api('/conversations?' + params.toString());
+            this.conversations = data.conversations || [];
+            this.convTotal = data.total || this.conversations.length;
+            this.convTotalTokens = this.conversations.reduce(
+              (sum, c) => sum + (c.input_tokens || 0) + (c.output_tokens || 0), 0
+            );
+          } catch (e) {
+            this.convError = e.message;
+            this.conversations = [];
+          }
+          this.convLoading = false;
+        },
+        async loadConversationDetail(sessionId) {
+          this.selectedConvId = sessionId;
+          try {
+            const data = await this.api('/conversations/' + encodeURIComponent(sessionId));
+            this.selectedConvMessages = data.messages || [];
+          } catch (e) {
+            this.selectedConvMessages = [{ role: 'system', content: '加载失败: ' + e.message }];
+          }
+        },
+
+        async continueConversation(conv) {
+          // Load conversation messages and switch to chat page
+          this.page = 'chat';
+          this.chatMessages = [];
+          this.chatLoading = true;
+
+          try {
+            const data = await this.api('/conversations/' + encodeURIComponent(conv.id));
+            const messages = data.messages || [];
+
+            // Convert messages to chat format
+            for (const msg of messages) {
+              if (msg.role === 'user' && msg.content) {
+                this.chatMessages.push({ role: 'user', text: msg.content });
+              } else if (msg.role === 'assistant' && msg.content) {
+                this.chatMessages.push({ role: 'assistant', text: msg.content });
+              }
+            }
+
+            // Add a system message indicating this is a continued conversation
+            if (this.chatMessages.length > 0) {
+              this.chatMessages.push({
+                role: 'system',
+                text: `── 以上为历史消息（来自会话: ${conv.title || conv.id}，模型: ${conv.model}）──\n请在下方继续对话：`,
+              });
+            }
+
+            this.scrollToBottom();
+          } catch (e) {
+            this.chatMessages.push({ role: 'assistant', text: '[加载失败] ' + e.message });
+          }
+
+          this.chatLoading = false;
+        },
+        async renameHistoryConv(conv) {
+          var title = (conv._newTitle || '').trim();
+          if (!title) { conv._renaming = false; return; }
+          try {
+            await this.api('/conversations/' + encodeURIComponent(conv.id) + '/rename', {
+              method: 'PUT', body: JSON.stringify({ title: title }),
+            });
+            // Replace objects for Alpine reactivity
+            var sid = conv.id;
+            this.conversations = this.conversations.map(function(c) {
+              return c.id === sid ? Object.assign({}, c, { title: title, _renaming: false }) : c;
+            });
+            this.chatSessions = this.chatSessions.map(function(s) {
+              return s.id === sid ? Object.assign({}, s, { preview: title }) : s;
+            });
+            if (sid === this.chatActiveSessionId) { this.chatActiveTitle = title; }
+          } catch(e) { this.showToast('重命名失败: ' + e.message, false); }
+        },
+
+        // ========== Chat ==========
+        async checkHermes() {
+          try {
+            const data = await this.api('/chat/hermes-path');
+            this.hermesPath = data.path;
+          } catch (e) { this.hermesPath = null; }
+        },
+        async sendChat() {
+          let msg = this.chatInput.trim();
+          // Disable if no text and no attachments
+          if ((!msg && this.chatAttachments.length === 0) || this.chatLoading) return;
+          // Prepend file paths to message
+          if (this.chatAttachments.length > 0) {
+            const paths = this.chatAttachments.map(a => a.path).join('\n');
+            msg = paths + (msg ? '\n' + msg : '');
+            this.chatAttachments = [];
+          }
+          this.chatMessages.push({ role: 'user', text: msg });
+          this.chatInput = '';
+          this.chatLoading = true;
+          this.chatStreamText = '';
+          this.scrollToBottom();
+
+          // Build history for context (only user + assistant messages, last 20)
+          const history = this.chatMessages
+            .filter(m => m.role === 'user' || m.role === 'assistant')
+            .slice(0, -1)  // exclude the just-added user message
+            .slice(-20)
+            .map(m => ({ role: m.role, content: m.text }));
+
+          // Add streaming assistant message placeholder
+          const streamIdx = this.chatMessages.length;
+          this.chatMessages.push({ role: 'assistant', text: '', streaming: true });
+
+          try {
+            const res = await fetch('/api/chat', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ message: msg, history }),
+            });
+            if (!res.ok) {
+              const err = await res.json().catch(() => ({ detail: res.statusText }));
+              throw new Error(err.detail || res.statusText);
+            }
+
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder();
+            let fullText = '';
+            let buffer = '';
+
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              buffer += decoder.decode(value, { stream: true });
+
+              // Process complete SSE lines
+              const lines = buffer.split('\n');
+              buffer = lines.pop() || '';  // keep incomplete line in buffer
+
+              for (const line of lines) {
+                if (!line.startsWith('data: ')) continue;
+                try {
+                  const data = JSON.parse(line.slice(6));
+                  if (data.type === 'delta') {
+                    fullText += data.content;
+                    this.chatMessages[streamIdx].text = fullText;
+                    this.chatStreamText = fullText;
+                    this.scrollToBottom();
+                  } else if (data.type === 'error') {
+                    fullText += '\n\n⚠️ **错误**: ' + data.message;
+                    this.chatMessages[streamIdx].text = fullText;
+                  } else if (data.type === 'done' || data.type === 'finish') {
+                    // Stream complete
+                  }
+                } catch {}
+              }
+            }
+          } catch (e) {
+            this.chatMessages[streamIdx].text = fullText || ('⚠️ **连接错误**: ' + e.message);
+          }
+
+          // Remove streaming flag
+          this.chatMessages[streamIdx].streaming = false;
+          this.chatLoading = false;
+          this.chatStreamText = '';
+          this.scrollToBottom();
+        },
+        scrollToBottom() {
+          this.$nextTick(() => {
+            const box = this.$refs.chatBox;
+            if (box) box.scrollTop = box.scrollHeight;
+          });
+        },
+        async copyAssistantMsg(msg, mode) {
+          // mode: 'text' = strip markdown, 'markdown' = preserve raw
+          const text = mode === 'markdown' ? msg.text : (msg.text || '').replace(/#{1,6}\s?/g, '').replace(/\*{1,3}([^*]+)\*{1,3}/g, '$1').replace(/`{1,3}[^`]*`{1,3}/g, '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/^[*-]\s/gm, '').replace(/^>\s/gm, '').replace(/\n{3,}/g, '\n\n').trim();
+          try {
+            await navigator.clipboard.writeText(text);
+            msg._copied = true;
+            setTimeout(() => { msg._copied = false; }, 2000);
+          } catch(e) {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            msg._copied = true;
+            setTimeout(() => { msg._copied = false; }, 2000);
+          }
+        },
+        async regenerateAnswer(msg, idx) {
+          if (this.chatLoading) return;
+          // Find the user message before this assistant message
+          let userMsg = null;
+          for (let j = idx - 1; j >= 0; j--) {
+            if (this.chatMessages[j].role === 'user') { userMsg = this.chatMessages[j]; break; }
+          }
+          if (!userMsg) return;
+          // Track iteration
+          msg.iteration = (msg.iteration || 0) + 1;
+          // Remove only this assistant message (not user message)
+          this.chatMessages.splice(idx);
+          // Call API directly — don't push a new user message
+          await this.sendChatDirect(userMsg.text);
+        },
+        async sendChatDirect(userText) {
+          this.chatLoading = true;
+          this.chatStreamText = '';
+          this.scrollToBottom();
+          const history = this.chatMessages
+            .filter(m => m.role === 'user' || m.role === 'assistant')
+            .slice(-20)
+            .map(m => ({ role: m.role, content: m.text }));
+          const streamIdx = this.chatMessages.length;
+          this.chatMessages.push({ role: 'assistant', text: '', streaming: true });
+          try {
+            const res = await fetch('/api/chat', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ message: userText, history }),
+            });
+            if (!res.ok) throw new Error((await res.json().catch(()=>({detail:res.statusText}))).detail||res.statusText);
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder();
+            let full = '', buf = '';
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              buf += decoder.decode(value, { stream: true });
+              const lines = buf.split('\n'); buf = lines.pop() || '';
+              for (const line of lines) {
+                if (!line.startsWith('data: ')) continue;
+                try {
+                  const d = JSON.parse(line.slice(6));
+                  if (d.type === 'delta') { full += d.content; this.chatMessages[streamIdx].text = full; this.chatStreamText = full; this.scrollToBottom(); }
+                  else if (d.type === 'error') { full += '\n\n⚠️ **错误**: ' + d.message; this.chatMessages[streamIdx].text = full; }
+                } catch {}
+              }
+            }
+          } catch (e) {
+            this.chatMessages[streamIdx].text = full || ('⚠️ **错误**: ' + e.message);
+          }
+          this.chatMessages[streamIdx].streaming = false;
+          this.chatLoading = false;
+          this.chatStreamText = '';
+          this.scrollToBottom();
+        },
+
+        // ========== File Upload ==========
+        async uploadChatFile(event) {
+          const file = event.target.files[0];
+          if (!file) return;
+          const formData = new FormData();
+          formData.append('file', file);
+          try {
+            const res = await fetch('/api/chat/upload', { method: 'POST', body: formData });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || res.statusText);
+            this.chatAttachments.push({ name: data.filename, path: data.saved_path });
+          } catch (e) {
+            this.showToast('上传失败: ' + e.message, false);
+          }
+          event.target.value = '';
+        },
+        newConversation() {
+          // Auto-save current conversation before clearing
+          if (this.chatMessages.length > 1) { this.saveConversation(); }
+          this.chatMessages = [];
+          this.chatInput = '';
+          this.chatAttachments = [];
+          this.chatStreamText = '';
+          this.chatActiveSessionId = null;
+          this.chatActiveTitle = '';
+        },
+        async saveConversation() {
+          var msgs = this.chatMessages.filter(function(m) { return m.role === 'user' || m.role === 'assistant'; });
+          if (msgs.length === 0) return;
+          try {
+            var body = { messages: msgs };
+            if (this.chatActiveSessionId) body.session_id = this.chatActiveSessionId;
+            if (this.chatActiveTitle) body.title = this.chatActiveTitle;
+            var result = await this.api('/chat/save-conversation', {
+              method: 'POST', body: JSON.stringify(body),
+            });
+            if (result.success) {
+              this.chatActiveSessionId = result.session_id;
+              this.chatActiveTitle = result.title;
+              this.loadChatSessions();
+            }
+          } catch(e) {}
+        },
+        async loadChatSessions() {
+          this.chatSessionsLoading = true;
+          try {
+            const data = await this.api('/conversations?limit=20');
+            this.chatSessions = (data.conversations || []).map(function(s) {
+              var preview = (s.title || s.first_user_msg || '').substring(0, 60);
+              var time = '';
+              if (s.started_at) { try { time = new Date(s.started_at * 1000).toLocaleString(); } catch(e) { time = s.started_at; } }
+              return { id: s.id, preview: preview, time: time, count: s.message_count || 0, model: s.model || '' };
+            });
+          } catch(e) { this.chatSessions = []; }
+          this.chatSessionsLoading = false;
+        },
+        async loadChatSession(id) {
+          if (this.chatLoading) return;
+          try {
+            const data = await this.api('/conversations/' + encodeURIComponent(id));
+            if (!data.messages) return;
+            var msgs = data.messages.filter(function(m) { return m.role === 'user' || m.role === 'assistant' || m.role === 'system'; });
+            var mapped = msgs.map(function(m) { return { role: m.role, text: m.content || '' }; });
+            this.chatMessages = mapped;
+            this.chatActiveSessionId = id;
+            this.chatActiveTitle = (data.session && data.session.title) || '';
+            this.showChatSessions = false;
+            this.$nextTick(function() { this.scrollToBottom(); }.bind(this));
+          } catch(e) { this.showToast('加载对话失败: ' + e.message, false); }
+        },
+        async renameActiveSession() {
+          var title = (this.chatRenameText || '').trim();
+          if (!title) { this.chatRenaming = false; return; }
+          try {
+            await this.api('/conversations/' + encodeURIComponent(this.chatActiveSessionId) + '/rename', {
+              method: 'PUT', body: JSON.stringify({ title: title }),
+            });
+            this.chatActiveTitle = title;
+            this.chatRenaming = false;
+            // Sync to chat sessions panel (replace object for Alpine reactivity)
+            this.chatSessions = this.chatSessions.map(function(s) {
+              return s.id === this.chatActiveSessionId ? Object.assign({}, s, { preview: title }) : s;
+            }.bind(this));
+            // Sync to history page
+            this.conversations = this.conversations.map(function(c) {
+              return c.id === this.chatActiveSessionId ? Object.assign({}, c, { title: title }) : c;
+            }.bind(this));
+          } catch(e) { this.showToast('重命名失败: ' + e.message, false); }
+        },
+        async renameChatSession(s) {
+          var title = (s._newTitle || '').trim();
+          if (!title) { s._renaming = false; return; }
+          try {
+            await this.api('/conversations/' + encodeURIComponent(s.id) + '/rename', {
+              method: 'PUT', body: JSON.stringify({ title: title }),
+            });
+            // Replace objects for Alpine reactivity
+            this.chatSessions = this.chatSessions.map(function(x) {
+              return x.id === s.id ? Object.assign({}, x, { preview: title, _renaming: false }) : x;
+            });
+            if (s.id === this.chatActiveSessionId) { this.chatActiveTitle = title; }
+            this.conversations = this.conversations.map(function(c) {
+              return c.id === s.id ? Object.assign({}, c, { title: title }) : c;
+            });
+          } catch(e) { this.showToast('重命名失败: ' + e.message, false); }
+        },
+
+        // ========== Skills ==========
+        async loadSkills() {
+          this.skillsLoading = true;
+          try {
+            const data = await this.api('/skills');
+            this.skills = data.skills || [];
+            this.skillCategories = data.categories || [];
+          } catch (e) {
+            this.skills = [];
+            this.skillCategories = [];
+          }
+          this.skillsLoading = false;
+        },
+
+        async viewSkillDetail(skill) {
+          this.selectedSkill = skill;
+          this.editingSkill = null;
+          this.deletingSkill = null;
+          // Fetch full detail with all_files
+          try {
+            const data = await this.api('/skills/' + encodeURIComponent(skill.category) + '/' + encodeURIComponent(skill.name));
+            this.selectedSkill = data;
+          } catch (e) {
+            // keep the card-level data
+          }
+        },
+
+        async toggleSkill(skill) {
+          const newState = !skill.enabled;
+          try {
+            await this.api('/skills/' + encodeURIComponent(skill.category) + '/' + encodeURIComponent(skill.name) + '/toggle', {
+              method: 'PUT',
+              body: JSON.stringify({ enabled: newState }),
+            });
+            skill.enabled = newState;
+            this.showNotify('✓ ' + skill.name + ' 已' + (newState ? '启用' : '禁用'), true);
+            if (this.selectedSkill?.name === skill.name && this.selectedSkill?.category === skill.category) {
+              this.selectedSkill.enabled = newState;
+            }
+          } catch (e) {
+            this.showNotify('操作失败: ' + e.message, false);
+          }
+        },
+
+        startEditSkill(skill) {
+          if (!skill || !skill.content) {
+            this.showNotify('⚠️ 该技能没有可编辑的 SKILL.md 内容', false);
+            return;
+          }
+          this.editingSkill = skill;
+          this.editingContent = skill.content;
+          this.selectedSkill = null;
+          this.deletingSkill = null;
+        },
+
+        async saveSkillContent() {
+          const skill = this.editingSkill;
+          if (!skill) return;
+          try {
+            await this.api('/skills/' + encodeURIComponent(skill.category) + '/' + encodeURIComponent(skill.name) + '/content', {
+              method: 'PUT',
+              body: JSON.stringify({ content: this.editingContent }),
+            });
+            // Update local data
+            skill.content = this.editingContent;
+            if (this.selectedSkill?.name === skill.name) {
+              this.selectedSkill.content = this.editingContent;
+            }
+            this.editingSkill = null;
+            this.showNotify('✓ SKILL.md 已保存', true);
+            await this.loadSkills();
+          } catch (e) {
+            this.showNotify('保存失败: ' + e.message, false);
+          }
+        },
+
+        confirmDeleteSkill(skill) {
+          this.deletingSkill = skill;
+          this.editingSkill = null;
+          this.selectedSkill = null;
+        },
+
+        async deleteSkill() {
+          const skill = this.deletingSkill;
+          if (!skill) return;
+          try {
+            await this.api('/skills/' + encodeURIComponent(skill.category) + '/' + encodeURIComponent(skill.name), {
+              method: 'DELETE',
+            });
+            this.deletingSkill = null;
+            this.showNotify('✓ 已删除 ' + skill.category + '/' + skill.name, true);
+            await this.loadSkills();
+          } catch (e) {
+            this.showNotify('删除失败: ' + e.message, false);
+          }
+        },
+
+        async createSkill() {
+          const s = this.newSkill;
+          if (!s.category || !s.name) {
+            this.showNotify('请填写分类和技能名称', false);
+            return;
+          }
+          try {
+            await this.api('/skills', {
+              method: 'POST',
+              body: JSON.stringify(s),
+            });
+            this.showSkillCreate = false;
+            this.newSkill = { category: '', name: '', content: '' };
+            this.showNotify('✓ 技能 ' + s.category + '/' + s.name + ' 已创建', true);
+            await this.loadSkills();
+          } catch (e) {
+            this.showNotify('创建失败: ' + e.message, false);
+          }
+        },
+
+        async importSkill() {
+          const s = this.importSkill;
+          if (!s.category || !s.name || !this.importSkillFile) {
+            this.showNotify('请填写分类、名称并选择文件', false);
+            return;
+          }
+          try {
+            const formData = new FormData();
+            formData.append('category', s.category);
+            formData.append('name', s.name);
+            formData.append('file', this.importSkillFile);
+            const res = await fetch('/api/skills/import', {
+              method: 'POST',
+              body: formData,
+            });
+            if (!res.ok) {
+              const err = await res.json().catch(() => ({ detail: res.statusText }));
+              throw new Error(err.detail || res.statusText);
+            }
+            this.showSkillImport = false;
+            this.importSkill = { category: '', name: '' };
+            this.importSkillFile = null;
+            this.showNotify('✓ 已导入到 ' + s.category + '/' + s.name, true);
+            await this.loadSkills();
+          } catch (e) {
+            this.showNotify('导入失败: ' + e.message, false);
+          }
+        },
+
+        showNotify(msg, ok) {
+          this.skillNotifyMsg = msg;
+          this.skillNotifyOk = ok;
+          setTimeout(() => { this.skillNotifyMsg = ''; }, 4000);
+        },
+
+        formatFileSize(bytes) {
+          if (!bytes) return '0 B';
+          if (bytes < 1024) return bytes + ' B';
+          if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+          return (bytes / 1048576).toFixed(1) + ' MB';
+        },
+
+        // ========== Cron ==========
+        async loadCron() {
+          this.cronLoading = true;
+          try {
+            const data = await this.api('/cron');
+            this.cronJobs = data.jobs || [];
+          } catch (e) { this.cronJobs = []; }
+          this.cronLoading = false;
+        },
+
+        // ========== Logs ==========
+        async loadLogs() {
+          this.logLoading = true;
+          try {
+            const data = await this.api('/logs');
+            this.logFiles = data.logs || [];
+          } catch (e) { this.logFiles = []; }
+          this.logLoading = false;
+        },
+        async loadLogContent(filename) {
+          try {
+            const data = await this.api('/logs/' + encodeURIComponent(filename));
+            this.logContent = data.content;
+            this.logContentName = filename;
+          } catch (e) {
+            this.logContent = '加载失败: ' + e.message;
+            this.logContentName = filename;
+          }
+        },
+      };
+    }
+  </script>
+
+</body>
+</html>
