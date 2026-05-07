@@ -74,23 +74,6 @@ Hermes Agent 的现代化 Web 管理面板，提供一站式配置管理、对�
 <!-- screenshot: docs/screenshots/monitoring.png -->
 ![服务监控](docs/screenshots/monitoring.png)
 
-## 截图说明
-
-将项目截图放入 `docs/screenshots/` 目录，命名与上方图片路径一致，即可在 GitHub 上展示。
-
-```bash
-mkdir -p docs/screenshots
-# 放入截图文件：
-#   docs/screenshots/dashboard.png
-#   docs/screenshots/config.png
-#   docs/screenshots/conversations.png
-#   docs/screenshots/chat.png
-#   docs/screenshots/skills.png
-#   docs/screenshots/cron.png
-#   docs/screenshots/logs.png
-#   docs/screenshots/monitoring.png
-```
-
 ## 技术栈
 
 - **后端**: Python + FastAPI
