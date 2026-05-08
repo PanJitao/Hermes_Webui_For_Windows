@@ -91,8 +91,8 @@ Hermes Agent 的现代化 Web 管理面板，提供一站式配置管理、对�
 
 ```bash
 # 克隆项目
-git clone <repo-url>
-cd hermes-webui
+git clone https://github.com/PanJitao/Hermes_Webui_For_Windows.git
+cd Hermes_Webui_For_Windows
 
 # 安装依赖
 pip install -r requirements.txt
